@@ -98,6 +98,12 @@ export class Visitor {
         this.originalWhere = this.where;
         this.where = this.where.replace(rx, () => `$${keys.next().value}`);
         this.includes.forEach((item) => item.asSurrealDb());
+
+        // Replace square brackets with parenthesis
+        // TODO: Is this truly necessary?
+        this.where = this.where.replace(/[\[]/g, '(');
+        this.where = this.where.replace(/[\]]/g, ')');
+
         return this;
     }
 
