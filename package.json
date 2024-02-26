@@ -6,7 +6,7 @@
   "author": "Andrew G. Knackstedt",
   "license": "MIT",
   "files": [
-    "dist/*",
+    "dist",
     "readme.md"
   ],
   "scripts": {
