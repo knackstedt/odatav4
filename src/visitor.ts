@@ -50,6 +50,10 @@ export class Visitor {
         this.options = options;
         if (this.options.useParameters != false) this.options.useParameters = true;
         this.type = options.type || SQLLang.ANSI;
+
+        // SurrealDB handles p0 unusually, so we start at 1.
+        if (this.type == SQLLang.SurrealDB)
+            this.parameterSeed = 1;
     }
 
     from(table: string) {
