@@ -26,7 +26,8 @@ export enum SQLLang {
     MsSql,
     MySql,
     PostgreSql,
-    Oracle
+    Oracle,
+    SurrealDB
 }
 
 export class Visitor {
@@ -62,6 +63,10 @@ export class Visitor {
                     sql += ` FETCH NEXT ${this.limit} ROWS ONLY`;
                 }
                 break;
+            case SQLLang.SurrealDB:
+                if (typeof this.limit == "number") sql += ` LIMIT ${this.limit}`;
+                if (typeof this.skip == "number") sql += ` START ${this.skip}`;
+                break;
             case SQLLang.MySql:
             case SQLLang.PostgreSql:
             default:
@@ -79,6 +84,16 @@ export class Visitor {
         this.originalWhere = this.where;
         this.where = this.where.replace(rx, () => `@${keys.next().value}`);
         this.includes.forEach((item) => item.asMsSql());
+        return this;
+    }
+
+    asSurrealDb() {
+        this.type = SQLLang.MsSql;
+        let rx = new RegExp("\\?", "g");
+        let keys = this.parameters.keys();
+        this.originalWhere = this.where;
+        this.where = this.where.replace(rx, () => `$${keys.next().value}`);
+        this.includes.forEach((item) => item.asSurrealDb());
         return this;
     }
 
@@ -106,6 +121,7 @@ export class Visitor {
             case SQLLang.MySql:
             case SQLLang.PostgreSql: return this.asAnsiSql();
             case SQLLang.Oracle: return this.asOracleSql();
+            case SQLLang.SurrealDB: return this.asSurrealDb();
             default: return this;
         }
     }
@@ -313,37 +329,78 @@ export class Visitor {
     protected VisitMethodCallExpression(node: Token, context: any) {
         var method = node.value.method;
         var params = node.value.parameters || [];
+        let fn: string;
         switch (method) {
             case "contains":
-                this.Visit(params[0], context);
-                if (this.options.useParameters) {
-                    let name = `p${this.parameterSeed++}`;
+                if (this.type == SQLLang.SurrealDB) {
+                    this.where += 'string::contains(';
+                    this.Visit(params[0], context);
+
                     let value = Literal.convert(params[1].value, params[1].raw);
-                    this.parameters.set(name, `%${value}%`);
-                    this.where += " like ?";
-                } else this.where += ` like '%${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}%'`;
+                    let name = `p${this.parameterSeed++}`;
+                    this.parameters.set(name, value);
+                    this.where += `, ?)`;
+                }
+                else {
+                    this.Visit(params[0], context);
+                    if (this.options.useParameters) {
+                        let name = `p${this.parameterSeed++}`;
+                        let value = Literal.convert(params[1].value, params[1].raw);
+                        this.parameters.set(name, `%${value}%`);
+                        this.where += ` LIKE ?`;
+                    }
+                    else this.where += ` LIKE '%${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}%'`;
+                }
                 break;
             case "endswith":
-                this.Visit(params[0], context);
-                if (this.options.useParameters) {
-                    let name = `p${this.parameterSeed++}`;
+                if (this.type == SQLLang.SurrealDB) {
+                    this.where += 'string::endsWith(';
+                    this.Visit(params[0], context);
+
                     let value = Literal.convert(params[1].value, params[1].raw);
-                    this.parameters.set(name, `%${value}`);
-                    this.where += " like ?";
-                } else this.where += ` like '%${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}'`;
+                    let name = `p${this.parameterSeed++}`;
+                    this.parameters.set(name, value);
+                    this.where += `, ?)`;
+                }
+                else {
+                    this.Visit(params[0], context);
+                    if (this.options.useParameters) {
+                        let name = `p${this.parameterSeed++}`;
+                        let value = Literal.convert(params[1].value, params[1].raw);
+                        this.parameters.set(name, `%${value}`);
+                        this.where += ` LIKE ?`;
+                    } 
+                    else this.where += ` LIKE '%${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}'`;
+                }
+
                 break;
             case "startswith":
-                this.Visit(params[0], context);
-                if (this.options.useParameters) {
-                    let name = `p${this.parameterSeed++}`;
+                if (this.type == SQLLang.SurrealDB) {
+                    this.where += 'string::startsWith(';
+                    this.Visit(params[0], context);
+
                     let value = Literal.convert(params[1].value, params[1].raw);
-                    this.parameters.set(name, `${value}%`);
-                    this.where += " like ?";
-                } else this.where += ` like '${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}%'`;
+                    let name = `p${this.parameterSeed++}`;
+                    this.parameters.set(name, value);
+                    this.where += `, ?)`;
+                }
+                else {
+                    this.Visit(params[0], context);
+                    if (this.options.useParameters) {
+                        let name = `p${this.parameterSeed++}`;
+                        let value = Literal.convert(params[1].value, params[1].raw);
+                        this.parameters.set(name, `${value}%`);
+                        this.where += ` LIKE ?`;
+                    } 
+                    else this.where += ` LIKE '${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}%'`;
+                }
+
                 break;
             case "indexof":
-                let fn = "";
+                fn = "";
                 switch (this.type) {
+                    case SQLLang.SurrealDB:
+                        fn = 'array::find_index'
                     case SQLLang.MsSql:
                         fn = "CHARINDEX";
                         break;
@@ -366,22 +423,22 @@ export class Visitor {
                 this.where += ") - 1";
                 break;
             case "round":
-                this.where += "ROUND(";
+                this.where += this.type == SQLLang.SurrealDB ? "math::round(" : "ROUND(";
                 this.Visit(params[0], context);
                 this.where += ")";
                 break;
             case "length":
-                this.where += "LEN(";
+                this.where += this.type == SQLLang.SurrealDB ? "string::len(" : "LEN(";
                 this.Visit(params[0], context);
                 this.where += ")";
                 break;
             case "tolower":
-                this.where += "LCASE(";
+                this.where += this.type == SQLLang.SurrealDB ? "string::lowercase(" : "LCASE(";
                 this.Visit(params[0], context);
                 this.where += ")";
                 break;
             case "toupper":
-                this.where += "UCASE(";
+                this.where += this.type == SQLLang.SurrealDB ? "string::uppercase(" : "UCASE(";
                 this.Visit(params[0], context);
                 this.where += ")";
                 break;
@@ -393,15 +450,21 @@ export class Visitor {
             case "hour":
             case "minute":
             case "second":
-                this.where += `${method.toUpperCase()}(`;
+                this.where += this.type == SQLLang.SurrealDB 
+                    ? `time::${method}(`
+                    : `${method.toUpperCase()}(`;
                 this.Visit(params[0], context);
                 this.where += ")";
                 break;
             case "now":
-                this.where += "NOW()";
+                this.where += this.type == SQLLang.SurrealDB 
+                    ? "time::now()"
+                    : "NOW()";
                 break;
             case "trim":
-                this.where += "TRIM(' ' FROM ";
+                this.where += this.type == SQLLang.SurrealDB 
+                    ? "string::trim(" 
+                    : "TRIM(' ' FROM ";
                 this.Visit(params[0], context);
                 this.where += ")";
                 break;
