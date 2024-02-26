@@ -283,12 +283,13 @@ export class Visitor {
 
     protected VisitNotEqualsExpression(node: Token, context: any) {
         this.Visit(node.value.left, context);
-        this.where += " <> ";
+        this.where += this.type == SQLLang.SurrealDB ? " != " : " <> ";
         this.Visit(node.value.right, context);
         if (this.options.useParameters && context.literal == null) {
-            this.where = this.where.replace(/<> \?$/, "IS NOT NULL").replace(new RegExp(`\\? <> \\[${context.identifier}\\]$`), `[${context.identifier}] IS NOT NULL`);
-        } else if (context.literal == "NULL") {
-            this.where = this.where.replace(/<> NULL$/, "IS NOT NULL").replace(new RegExp(`NULL <> \\[${context.identifier}\\]$`), `[${context.identifier}] IS NOT NULL`);
+            this.where = this.where.replace(/(?:<>|!=) \?$/, "IS NOT NULL").replace(new RegExp(`\\? (?:<>|!=) \\[${context.identifier}\\]$`), `[${context.identifier}] IS NOT NULL`);
+        }
+        else if (context.literal == "NULL") {
+            this.where = this.where.replace(/(?:<>|!=) NULL$/, "IS NOT NULL").replace(new RegExp(`NULL (?:<>|!=) \\[${context.identifier}\\]$`), `[${context.identifier}] IS NOT NULL`);
         }
     }
 
@@ -369,7 +370,7 @@ export class Visitor {
                         let value = Literal.convert(params[1].value, params[1].raw);
                         this.parameters.set(name, `%${value}`);
                         this.where += ` LIKE ?`;
-                    } 
+                    }
                     else this.where += ` LIKE '%${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}'`;
                 }
 
@@ -391,7 +392,7 @@ export class Visitor {
                         let value = Literal.convert(params[1].value, params[1].raw);
                         this.parameters.set(name, `${value}%`);
                         this.where += ` LIKE ?`;
-                    } 
+                    }
                     else this.where += ` LIKE '${SQLLiteral.convert(params[1].value, params[1].raw).slice(1, -1)}%'`;
                 }
 
@@ -450,20 +451,20 @@ export class Visitor {
             case "hour":
             case "minute":
             case "second":
-                this.where += this.type == SQLLang.SurrealDB 
+                this.where += this.type == SQLLang.SurrealDB
                     ? `time::${method}(`
                     : `${method.toUpperCase()}(`;
                 this.Visit(params[0], context);
                 this.where += ")";
                 break;
             case "now":
-                this.where += this.type == SQLLang.SurrealDB 
+                this.where += this.type == SQLLang.SurrealDB
                     ? "time::now()"
                     : "NOW()";
                 break;
             case "trim":
-                this.where += this.type == SQLLang.SurrealDB 
-                    ? "string::trim(" 
+                this.where += this.type == SQLLang.SurrealDB
+                    ? "string::trim("
                     : "TRIM(' ' FROM ";
                 this.Visit(params[0], context);
                 this.where += ")";
