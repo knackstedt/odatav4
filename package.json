@@ -1,6 +1,6 @@
 {
   "name": "@dotglitch/odatav4",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Maintained ODataV4 adapter. Supports SurrealDB.",
   "main": "dist/main.js",
   "author": "Andrew G. Knackstedt",
