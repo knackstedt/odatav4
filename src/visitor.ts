@@ -33,9 +33,9 @@ export enum SQLLang {
 export class Visitor {
     protected options: SqlOptions;
     type: SQLLang;
-    select: string = "";
-    where: string = "";
-    orderby: string = "";
+    select = "";
+    where = "";
+    orderby = "";
     skip: number;
     limit: number;
     inlinecount: boolean;
@@ -92,7 +92,7 @@ export class Visitor {
     }
 
     asSurrealDb() {
-        this.type = SQLLang.MsSql;
+        this.type = SQLLang.SurrealDB;
         let rx = new RegExp("\\?", "g");
         let keys = this.parameters.keys();
         this.originalWhere = this.where;
@@ -350,7 +350,7 @@ export class Visitor {
                     let value = Literal.convert(params[1].value, params[1].raw);
                     let name = `p${this.parameterSeed++}`;
                     this.parameters.set(name, value);
-                    this.where += `, ?)`;
+                    this.where += ` || '', ?)`;
                 }
                 else {
                     this.Visit(params[0], context);
@@ -371,7 +371,7 @@ export class Visitor {
                     let value = Literal.convert(params[1].value, params[1].raw);
                     let name = `p${this.parameterSeed++}`;
                     this.parameters.set(name, value);
-                    this.where += `, ?)`;
+                    this.where += ` || '', ?)`;
                 }
                 else {
                     this.Visit(params[0], context);
@@ -393,7 +393,7 @@ export class Visitor {
                     let value = Literal.convert(params[1].value, params[1].raw);
                     let name = `p${this.parameterSeed++}`;
                     this.parameters.set(name, value);
-                    this.where += `, ?)`;
+                    this.where += ` || '', ?)`;
                 }
                 else {
                     this.Visit(params[0], context);

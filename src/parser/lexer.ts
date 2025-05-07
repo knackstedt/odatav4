@@ -173,13 +173,16 @@ export class Token {
     type: TokenType;
     raw: string;
     metadata: any;
-    constructor(token) {
+
+    constructor(token: Partial<Token>) {
         this.position = token.position;
         this.next = token.next;
         this.value = token.value;
         this.type = token.type;
         this.raw = token.raw;
-        if (token.metadata) this.metadata = token.metadata;
+
+        if (token.metadata)
+            this.metadata = token.metadata;
     }
 }
 
@@ -200,7 +203,8 @@ export namespace Lexer {
             type: tokenType,
             raw: Utils.stringify(value, index, next)
         });
-        if (metadataContextContainer && metadataContextContainer.metadata) {
+
+        if (metadataContextContainer?.metadata) {
             token.metadata = metadataContextContainer.metadata;
             delete metadataContextContainer.metadata;
         }
@@ -218,14 +222,32 @@ export namespace Lexer {
     }
 
     // core definitions
-    export function ALPHA(value: number): boolean { return (value >= 0x41 && value <= 0x5a) || (value >= 0x61 && value <= 0x7a) || value >= 0x80; }
-    export function DIGIT(value: number): boolean { return (value >= 0x30 && value <= 0x39); }
-    export function HEXDIG(value: number): boolean { return Lexer.DIGIT(value) || Lexer.AtoF(value); }
-    export function AtoF(value: number): boolean { return (value >= 0x41 && value <= 0x46) || (value >= 0x61 && value <= 0x66); }
-    export function DQUOTE(value: number): boolean { return value === 0x22; }
-    export function SP(value: number): boolean { return value === 0x20; }
-    export function HTAB(value: number): boolean { return value === 0x09; }
-    export function VCHAR(value: number): boolean { return value >= 0x21 && value <= 0x7e; }
+    export function ALPHA(value: number): boolean {
+        return (value >= 0x41 && value <= 0x5a) ||
+               (value >= 0x61 && value <= 0x7a) ||
+               value >= 0x80;
+    }
+    export function DIGIT(value: number): boolean {
+        return (value >= 0x30 && value <= 0x39);
+    }
+    export function HEXDIG(value: number): boolean {
+        return Lexer.DIGIT(value) || Lexer.AtoF(value);
+    }
+    export function AtoF(value: number): boolean {
+        return (value >= 0x41 && value <= 0x46) || (value >= 0x61 && value <= 0x66);
+    }
+    export function DQUOTE(value: number): boolean {
+        return value === 0x22;
+    }
+    export function SP(value: number): boolean {
+        return value === 0x20;
+    }
+    export function HTAB(value: number): boolean {
+        return value === 0x09;
+    }
+    export function VCHAR(value: number): boolean {
+        return value >= 0x21 && value <= 0x7e;
+    }
 
     // punctuation
     export function whitespaceLength(value, index) {

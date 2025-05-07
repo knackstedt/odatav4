@@ -11,11 +11,14 @@ export namespace ODataUri {
             resource = ResourcePath.resourcePath(value, index, metadataContext);
         }
         if (!resource) return;
+
         let start = index;
         index = resource.next;
         metadataContext = resource.metadata;
 
         let query;
+
+        // 0x3f: '?'
         if (value[index] === 0x3f) {
             query = Query.queryOptions(value, index + 1, metadataContext);
             if (!query) return;

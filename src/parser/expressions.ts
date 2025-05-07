@@ -241,9 +241,9 @@ export namespace Expressions {
         if (!open) return;
         index = open;
         index = Lexer.BWS(value, index);
-        let parameters;
+
+        const parameters = [];
         if (min > 0) {
-            parameters = [];
             while (parameters.length < max) {
                 let expr = commonExpr(value, index);
                 if (parameters.length < min && !expr) return;

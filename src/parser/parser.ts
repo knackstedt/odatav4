@@ -4,18 +4,28 @@ import Expressions from "./expressions";
 import Query from "./query";
 import ResourcePath from "./resource-path";
 import ODataUri from "./odata-uri";
+import Utils from './utils';
 
-export const parserFactory = function (fn) {
-    return function (source, options) {
+export const parserFactory = function (
+    fn: (value: Utils.SourceArray, index: number, metadataContext?: any) => Lexer.Token
+) {
+    return function (source: string, options) {
         options = options || {};
         const raw = new Uint16Array(source.length);
         let pos = 0;
         for (let i = 0; i < source.length; i++) {
             raw[i] = source.charCodeAt(i);
         }
+
         let result = fn(raw, pos, options.metadata);
-        if (!result) throw new Error("Fail at " + pos);
-        if (result.next < raw.length) throw new Error("Unexpected character at " + result.next);
+
+        if (!result) {
+            throw new Error("Fail at " + pos);
+        }
+        if (result.next < raw.length) {
+            throw new Error("Unexpected character at " + result.next);
+        }
+
         return result;
     };
 };
