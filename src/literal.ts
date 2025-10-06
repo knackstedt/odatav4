@@ -1,3 +1,5 @@
+import { ODataV4ParseError } from './parser/utils';
+
 function integer(value: string): number {
     return +value;
 }
@@ -37,17 +39,42 @@ export class Literal {
             default: return undefined;
         }
     }
-    
-    'Edm.Guid'(value: string) { return decodeURIComponent(value); }
-    'Edm.Date'(value: string) { return value; }
-    'Edm.DateTimeOffset'(value: string) { return new Date(value); }
+
+    'Edm.Guid'(value: string) {
+        const decoded = decodeURIComponent(value);
+        // Note: this doesn't verify a specific GUID version, just the general format.
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded)) {
+            throw new ODataV4ParseError({ msg: `Guid ${value} is invalid` });
+        }
+        return decoded;
+    }
+    'Edm.Date'(value: string) {
+        const d = new Date(value);
+        if (!Number.isNaN(d.getTime())) {
+            return value;
+        }
+        throw new ODataV4ParseError({ msg: `Date ${value} is invalid` });
+    }
+    'Edm.DateTimeOffset'(value: string) {
+        const d = new Date(value);
+        if (!Number.isNaN(d.getTime())) {
+            return d;
+        }
+        throw new ODataV4ParseError({ msg: `DateTimeOffset ${value} is invalid` });
+    }
     'null'(value: string) { return null; }
-    'Edm.TimeOfDay'(value: string) { return new Date(`1970-01-01T${value}Z`); }
+    'Edm.TimeOfDay'(value: string) {
+        const d = new Date(`1970-01-01T${value}Z`);
+        if (!Number.isNaN(d.getTime())) {
+            return d;
+        }
+        throw new ODataV4ParseError({ msg: `TimeOfDay ${value} is invalid` });
+    }
     'Edm.Duration'(value: string) {
-        var m = value.match(/P([0-9]*D)?T?([0-9]{1,2}H)?([0-9]{1,2}M)?([\.0-9]*S)?/);
+        const m = value.match(/P([0-9]*D)?T?([0-9]{1,2}H)?([0-9]{1,2}M)?([\.0-9]*S)?/);
         if (m) {
-            var d = new Date(0);
-            for (var i = 1; i < m.length; i++) {
+            const d = new Date(0);
+            for (let i = 1; i < m.length; i++) {
                 switch (m[i].slice(-1)) {
                     case 'D': d.setDate(parseInt(m[i])); continue;
                     case 'H': d.setHours(parseInt(m[i])); continue;
@@ -56,8 +83,12 @@ export class Literal {
                 }
             }
 
-            return d.getTime();
+            const time = d.getTime();
+            // Ensure the date / time is valid
+            if (!Number.isNaN(time)) {
+                return d.getTime();
+            }
         }
-        throw new Error('Invalid Duration');
+        throw new ODataV4ParseError({ msg: `Duration ${value} is invalid` });
     }
 }
