@@ -39,7 +39,8 @@ export namespace NameOrIdentifier {
             if (comma) {
                 index = comma;
                 val = NameOrIdentifier.singleEnumValue(value, index);
-            } else break;
+            }
+            else break;
         }
 
         return Lexer.tokenize(value, start, index, { values: arr }, Lexer.TokenType.EnumValue);
@@ -83,7 +84,8 @@ export namespace NameOrIdentifier {
             token.next = index;
             token.raw = Utils.stringify(value, token.position, token.next);
             token.type = Lexer.TokenType.Collection;
-        } else return NameOrIdentifier.singleQualifiedTypeName(value, index);
+        }
+        else return NameOrIdentifier.singleQualifiedTypeName(value, index);
     }
     export function qualifiedEntityTypeName(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
         let start = index;
