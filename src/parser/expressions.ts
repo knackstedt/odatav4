@@ -96,7 +96,10 @@ export namespace Expressions {
 
     export function andExpr(value: Utils.SourceArray, index: number): Lexer.Token {
         let rws = Lexer.RWS(value, index);
-        if (rws === index || !Utils.equals(value, rws, "and")) return;
+        if (
+            rws === index ||
+            !Utils.stringify(value, rws, rws+3).toLowerCase().startsWith("and")
+        ) return;
         let start = index;
         index = rws + 3;
         rws = Lexer.RWS(value, index);
@@ -110,7 +113,10 @@ export namespace Expressions {
 
     export function orExpr(value: Utils.SourceArray, index: number): Lexer.Token {
         let rws = Lexer.RWS(value, index);
-        if (rws === index || !Utils.equals(value, rws, "or")) return;
+        if (
+            rws === index ||
+            !Utils.stringify(value, rws, rws + 2).toLowerCase().startsWith("or")
+        ) return;
         let start = index;
         index = rws + 2;
         rws = Lexer.RWS(value, index);
@@ -127,7 +133,9 @@ export namespace Expressions {
         if (rws === index) return;
         let start = index;
         index = rws;
-        if (!Utils.equals(value, index, expr)) return;
+        if (
+            !Utils.stringify(value, index, index + expr.length).toLowerCase().startsWith(expr.toLowerCase())
+        ) return;
         index += expr.length;
         rws = Lexer.RWS(value, index);
         if (rws === index) return;
@@ -152,7 +160,10 @@ export namespace Expressions {
     export function modExpr(value: Utils.SourceArray, index: number): Lexer.Token { return leftRightExpr(value, index, "mod", Lexer.TokenType.ModExpression); }
 
     export function notExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        if (!Utils.equals(value, index, "not")) return;
+        if (
+            !Utils.stringify(value, index, index + 3).toLowerCase().startsWith("not")
+        ) return;
+
         let start = index;
         index += 3;
         let rws = Lexer.RWS(value, index);
@@ -256,7 +267,8 @@ export namespace Expressions {
                     if (comma) index = comma;
                     else break;
                     index = Lexer.BWS(value, index);
-                } else break;
+                }
+                else break;
             }
         }
         index = Lexer.BWS(value, index);
@@ -390,7 +402,8 @@ export namespace Expressions {
 
                 return Lexer.tokenize(value, start, member.next, [token, member], Lexer.TokenType.FirstMemberExpression);
             }
-        } else member = memberExpr(value, index);
+        }
+        else member = memberExpr(value, index);
 
         token = token || member;
         if (!token) return;
@@ -430,7 +443,8 @@ export namespace Expressions {
                     next: nav
                 };
             }
-        } else if (!token) {
+        }
+        else if (!token) {
             token = NameOrIdentifier.streamProperty(value, index);
             if (token) index = token.next;
         }
@@ -548,7 +562,8 @@ export namespace Expressions {
             index = predicate.next;
             navigation = singleNavigationExpr(value, index);
             if (navigation) index = navigation.next;
-        } else {
+        }
+        else {
             path = collectionPathExpr(value, index);
             if (path) index = path.next;
         }
@@ -723,7 +738,8 @@ export namespace Expressions {
                 index = comma;
                 expr = functionExprParameter(value, index);
                 if (!expr) return;
-            } else {
+            }
+            else {
                 index = expr.next;
                 expr = null;
             }
@@ -790,7 +806,8 @@ export namespace Expressions {
             token = {
                 entity: entity
             };
-        } else token = {
+        }
+        else token = {
             entitySet: entitySet,
             keys: predicate
         };
