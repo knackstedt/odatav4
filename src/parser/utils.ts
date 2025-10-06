@@ -31,6 +31,16 @@ export namespace Utils {
 
         return i >= (min || 0) && i <= max ? index + i : 0;
     }
+
+
 }
 
 export default Utils;
+
+export class ODataV4ParseError extends Error {
+    constructor(err: { msg: string; } & { [key: string]: any }) {
+        super(err['msg'] || err['message'] || err['title']);
+
+        Object.assign(this, err);
+    }
+}
