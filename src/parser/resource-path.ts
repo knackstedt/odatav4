@@ -133,14 +133,14 @@ export namespace ResourcePath {
         }
     }
 
-    export function singleNavigation(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
+    export function singleNavigation(value: Utils.SourceArray, index: number, metadataContext: any): Lexer.Token {
         let token = ResourcePath.boundOperation(value, index, false, metadataContext) ||
             Expressions.refExpr(value, index) ||
             Expressions.valueExpr(value, index);
         if (token) return token;
 
         let start = index;
-        let name;
+        let name: Lexer.Token;
 
         if (value[index] === 0x2f) {
             name = NameOrIdentifier.qualifiedEntityTypeName(value, index + 1, metadataContext);
@@ -175,7 +175,7 @@ export namespace ResourcePath {
         let start = index;
         index = token.next;
 
-        let navigation;
+        let navigation: Lexer.Token;
         switch (token.type) {
             case Lexer.TokenType.EntityCollectionNavigationProperty:
                 navigation = ResourcePath.collectionNavigation(value, index, token.metadata);
@@ -225,7 +225,8 @@ export namespace ResourcePath {
 
     export function complexPath(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
         let start = index;
-        let name, token;
+        let name: Lexer.Token, token: Lexer.Token;
+
         if (value[index] === 0x2f) {
             name = NameOrIdentifier.qualifiedComplexTypeName(value, index + 1, metadataContext);
             if (name) index = name.next;
@@ -235,7 +236,8 @@ export namespace ResourcePath {
             token = ResourcePath.propertyPath(value, index + 1, metadataContext);
             if (!token) return;
             index = token.next;
-        } else token = ResourcePath.boundOperation(value, index, false, metadataContext);
+        }
+        else token = ResourcePath.boundOperation(value, index, false, metadataContext);
 
         if (!name && !token) return;
 
@@ -257,7 +259,7 @@ export namespace ResourcePath {
         if (!operation) return;
         index = operation.next;
 
-        let name, navigation;
+        let name:Lexer.Token, navigation:Lexer.Token;
         switch (operation.type) {
             case Lexer.TokenType.BoundActionCall:
                 break;
@@ -393,7 +395,8 @@ export namespace ResourcePath {
                 index = comma;
                 token = ResourcePath.functionParameter(value, index);
                 if (!token) return;
-            } else break;
+            }
+            else break;
         }
 
         let close = Lexer.CLOSE(value, index);
@@ -444,7 +447,8 @@ export namespace ResourcePath {
                 index = comma;
                 token = NameOrIdentifier.entitySetName(value, index, metadataContext);
                 if (!token) return;
-            } else break;
+            }
+            else break;
         }
 
         let close = Lexer.CLOSE(value, index);
