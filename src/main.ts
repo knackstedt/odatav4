@@ -1,7 +1,7 @@
 import { Visitor, SQLLang } from "./visitor";
 export { SQLLang } from "./visitor";
 import { filter, query } from "./parser/parser";
-import { Token } from "./parser/lexer";
+import Lexer from './parser/lexer';
 
 export interface SqlOptions {
     useParameters?: boolean;
@@ -18,11 +18,12 @@ export interface SqlOptions {
  */
 export function createQuery(odataQuery: string, options?: SqlOptions): Visitor;
 export function createQuery(odataQuery: string, options?: SqlOptions, type?: SQLLang): Visitor;
-export function createQuery(odataQuery: Token, options?: SqlOptions): Visitor;
-export function createQuery(odataQuery: Token, options?: SqlOptions, type?: SQLLang): Visitor;
-export function createQuery(odataQuery: string | Token, options = <SqlOptions>{}, type?: SQLLang): Visitor {
+export function createQuery(odataQuery: Lexer.Token, options?: SqlOptions): Visitor;
+export function createQuery(odataQuery: Lexer.Token, options?: SqlOptions, type?: SQLLang): Visitor;
+export function createQuery(odataQuery: string | Lexer.Token, options = <SqlOptions>{}, type?: SQLLang): Visitor {
     if (typeof type != "undefined" && type) options.type = type;
-    let ast: Token = <Token>(typeof odataQuery == "string" ? query(<string>odataQuery) : odataQuery);
+
+    let ast: Lexer.Token = <Lexer.Token>(typeof odataQuery == "string" ? query(<string>odataQuery) : odataQuery);
     return new Visitor(options).Visit(ast).asType();
 }
 
@@ -36,10 +37,10 @@ export function createQuery(odataQuery: string | Token, options = <SqlOptions>{}
  */
 export function createFilter(odataFilter: string, options?: SqlOptions): Visitor;
 export function createFilter(odataFilter: string, options?: SqlOptions, type?: SQLLang): Visitor;
-export function createFilter(odataFilter: Token, options?: SqlOptions): Visitor;
-export function createFilter(odataFilter: Token, options?: SqlOptions, type?: SQLLang): Visitor;
-export function createFilter(odataFilter: string | Token, options = <SqlOptions>{}, type?: SQLLang): Visitor {
+export function createFilter(odataFilter: Lexer.Token, options?: SqlOptions): Visitor;
+export function createFilter(odataFilter: Lexer.Token, options?: SqlOptions, type?: SQLLang): Visitor;
+export function createFilter(odataFilter: string | Lexer.Token, options = <SqlOptions>{}, type?: SQLLang): Visitor {
     if (typeof type != "undefined" && type) options.type = type;
-    let ast: Token = <Token>(typeof odataFilter == "string" ? filter(<string>odataFilter) : odataFilter);
+    let ast: Lexer.Token = <Lexer.Token>(typeof odataFilter == "string" ? filter(<string>odataFilter) : odataFilter);
     return new Visitor(options).Visit(ast).asType();
 }

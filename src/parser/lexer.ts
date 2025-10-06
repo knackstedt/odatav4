@@ -1,6 +1,6 @@
 import Utils from "./utils";
 
-export enum TokenType {
+enum tokenTypes {
     Literal = "Literal",
     ArrayOrObject = "ArrayOrObject",
     Array = "Array",
@@ -163,40 +163,43 @@ export enum TokenType {
     Metadata = "Metadata"
 }
 
-export const LexerTokenType = TokenType;
-export type LexerTokenType = TokenType;
+// class TokenBase
 
-export class Token {
-    position: number;
-    next: number;
-    value: any;
-    type: TokenType;
-    raw: string;
-    metadata: any;
-
-    constructor(token: Partial<Token>) {
-        this.position = token.position;
-        this.next = token.next;
-        this.value = token.value;
-        this.type = token.type;
-        this.raw = token.raw;
-
-        if (token.metadata)
-            this.metadata = token.metadata;
-    }
-}
-
-export const LexerToken = Token;
-export type LexerToken = Token;
 
 export namespace Lexer {
-    export type Token = LexerToken;
-    export const Token: typeof LexerToken = exports.Token;
-    export type TokenType = LexerTokenType;
-    export const TokenType: typeof LexerTokenType = exports.TokenType;
+    // export type Token = LexerToken;
+    export class Token {
+        position: number;
+        next: number;
+        type: TokenType;
+        raw: string;
 
-    export function tokenize(value: Utils.SourceArray, index: number, next: number, tokenValue: any, tokenType: TokenType, metadataContextContainer?: Token): Token {
-        let token = new exports.Token({
+        value: any;
+        metadata: any;
+
+        constructor(token: Partial<Token>) {
+            this.position = token.position;
+            this.next = token.next;
+            this.value = token.value;
+            this.type = token.type;
+            this.raw = token.raw;
+
+            if (token.metadata)
+                this.metadata = token.metadata;
+        }
+    };
+    export type TokenType = tokenTypes;
+    export const TokenType: typeof tokenTypes = tokenTypes;
+
+    export function tokenize(
+        value: Utils.SourceArray,
+        index: number,
+        next: number,
+        tokenValue: any,
+        tokenType: TokenType,
+        metadataContextContainer?: Token
+    ): Token {
+        let token = new Token({
             position: index,
             next: next,
             value: tokenValue,
@@ -211,8 +214,8 @@ export namespace Lexer {
         return token;
     }
 
-    export function clone(token): Token {
-        return new exports.Token({
+    export function clone(token: Token): Token {
+        return new Token({
             position: token.position,
             next: token.next,
             value: token.value,
@@ -371,13 +374,24 @@ export namespace Lexer {
     }
     export function base64b8(value: Utils.SourceArray, index: number): number {
         let start = index;
-        if (!Lexer.base64char(value[index])) return start;
+        if (!Lexer.base64char(value[index]))
+            return start;
         index++;
 
-        if (value[index] !== 0x41 || value[index] !== 0x51 || value[index] !== 0x67 || value[index] !== 0x77) return start;
+        if (
+            value[index] !== 0x41 ||
+            value[index] !== 0x51 ||
+            value[index] !== 0x67 ||
+            value[index] !== 0x77
+        )
+            return start;
         index++;
 
-        if (value[index] === 0x3d && value[index + 1] === 0x3d) index += 2;
+        if (
+            value[index] === 0x3d &&
+            value[index + 1] === 0x3d
+        )
+            index += 2;
         return index;
     }
     export function nanInfinity(value: Utils.SourceArray, index: number): number {
@@ -428,7 +442,10 @@ export namespace Lexer {
         return Utils.equals(value, index, "geometry") ? index + 8 : index;
     }
     export function identifierLeadingCharacter(value: number): boolean {
-        return Lexer.ALPHA(value) || value === 0x5f;
+        // Note: added 0x2e (.) to allow for dot in identifiers for things like odata.type for SurrealDB.
+        // other languages may have different syntax or need this removed.
+        // OTHER NOTE: SurrealDB has very loose rules on identifiers, this may need to be revisited.
+        return Lexer.ALPHA(value) || value === 0x5f || value === 0x2e;
     }
     export function identifierCharacter(value: number): boolean {
         return Lexer.identifierLeadingCharacter(value) || Lexer.DIGIT(value);
