@@ -4,7 +4,7 @@ import Expressions from "./expressions";
 import Query from "./query";
 import ResourcePath from "./resource-path";
 import ODataUri from "./odata-uri";
-import Utils from './utils';
+import Utils, { ODataV4ParseError } from './utils';
 
 export const parserFactory = function (
     fn: (value: Utils.SourceArray, index: number, metadataContext?: any) => Lexer.Token
@@ -20,10 +20,35 @@ export const parserFactory = function (
         let result = fn(raw, pos, options.metadata);
 
         if (!result) {
-            throw new Error("Fail at " + pos);
+            const source = Utils.stringify(raw, 0, raw.length);
+            const marker = ' '.repeat(result.next) + '^';
+            const at = source + "\n" + marker;
+
+            throw new ODataV4ParseError({
+                msg: `Parse error at index ${pos}. No parse found.`,
+                source,
+                marker,
+                character: Utils.stringify(raw, result.next, result.next + 1),
+                index: result.next,
+                at,
+            });
         }
+
+        // This block _may_ be optional, it appears to be a safety check.
+        // If it's commented out, a query will still be built but will be incomplete.
         if (result.next < raw.length) {
-            throw new Error("Unexpected character at " + result.next);
+            const source = Utils.stringify(raw, 0, raw.length);
+            const marker = ' '.repeat(result.next) + '^';
+            const at = source + "\n" + marker;
+
+            throw new ODataV4ParseError({
+                msg: `Parse error at index ${pos}. Incompletely parsed query ${result.next}/${raw.length}.`,
+                source,
+                marker,
+                character: Utils.stringify(raw, result.next, result.next + 1),
+                index: result.next,
+                at,
+            });
         }
 
         return result;
