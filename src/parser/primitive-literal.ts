@@ -89,7 +89,8 @@ export namespace PrimitiveLiteral {
         if (value[intNext] === 0x2e) {
             end = Utils.required(value, intNext + 1, Lexer.DIGIT, 1);
             if (!end || end === intNext + 1) return;
-        } else return;
+        }
+        else return;
 
         // TODO: detect only decimal value, no double/single detection here
         if (value[end] === 0x65) return;
@@ -102,7 +103,8 @@ export namespace PrimitiveLiteral {
         let nanInfLen = Lexer.nanInfinity(value, index);
         if (nanInfLen) {
             end += nanInfLen;
-        } else {
+        }
+        else {
             // TODO: use decimalValue function
             // var token = decimalValue(value, index);
             let sign = Lexer.SIGN(value, index);
@@ -115,7 +117,8 @@ export namespace PrimitiveLiteral {
             if (value[intNext] === 0x2e) {
                 decimalNext = Utils.required(value, intNext + 1, Lexer.DIGIT, 1);
                 if (decimalNext === intNext + 1) return;
-            } else return;
+            }
+            else return;
 
             if (value[decimalNext] === 0x65) {
                 let next = decimalNext + 1;
@@ -126,7 +129,8 @@ export namespace PrimitiveLiteral {
                 if (digitNext) {
                     end = digitNext;
                 }
-            } else end = decimalNext;
+            }
+            else end = decimalNext;
         }
 
         return Lexer.tokenize(value, start, end, "Edm.Double", Lexer.TokenType.Literal);
@@ -154,10 +158,12 @@ export namespace PrimitiveLiteral {
                         let amp = value[index] === 0x26;
                         if (Lexer.pcharNoSQUOTE(value, index) > index && !amp && !close && !comma && Lexer.RWS(value, index) === index) return;
                         break;
-                    } else {
+                    }
+                    else {
                         index = squote;
                     }
-                } else {
+                }
+                else {
                     let nextIndex = Math.max(Lexer.RWS(value, index), Lexer.pcharNoSQUOTE(value, index));
                     if (nextIndex === index) return;
                     index = nextIndex;
@@ -201,17 +207,20 @@ export namespace PrimitiveLiteral {
                 if (value[index] === 0x53) {
                     end = index + 1;
                     return end;
-                } else if (value[index] === 0x2e) {
+                }
+                else if (value[index] === 0x2e) {
                     index++;
                     let fractionalSecondsNext = Utils.required(value, index, Lexer.DIGIT, 1);
                     if (fractionalSecondsNext === index || value[fractionalSecondsNext] !== 0x53) return;
                     end = fractionalSecondsNext + 1;
                     return end;
-                } else if (value[index] === 0x48) {
+                }
+                else if (value[index] === 0x48) {
                     index++;
                     end = index;
                     return parseTimeFn();
-                } else if (value[index] === 0x4d) {
+                }
+                else if (value[index] === 0x4d) {
                     index++;
                     end = index;
                     return parseTimeFn();
@@ -283,20 +292,23 @@ export namespace PrimitiveLiteral {
                 let fractionalSecondsNext = Lexer.fractionalSeconds(value, secondNext + 1);
                 if (fractionalSecondsNext === secondNext + 1) return;
                 end = fractionalSecondsNext;
-            } else end = secondNext;
+            }
+            else end = secondNext;
         }
 
         let sign = Lexer.SIGN(value, end);
         if (value[end] === 0x5a) {
             end++;
-        } else if (sign) {
+        }
+        else if (sign) {
             let zHourNext = Lexer.hour(value, sign);
             let colon = Lexer.COLON(value, zHourNext);
             if (zHourNext === sign || !colon) return;
             let zMinuteNext = Lexer.minute(value, colon);
             if (zMinuteNext === colon) return;
             end = zMinuteNext;
-        } else return;
+        }
+        else return;
 
         return Lexer.tokenize(value, index, end, "Edm.DateTimeOffset", Lexer.TokenType.Literal);
     }
@@ -316,7 +328,8 @@ export namespace PrimitiveLiteral {
                 let fractionalSecondsNext = Lexer.fractionalSeconds(value, secondNext + 1);
                 if (fractionalSecondsNext === secondNext + 1) return;
                 end = fractionalSecondsNext;
-            } else end = secondNext;
+            }
+            else end = secondNext;
         }
 
         return Lexer.tokenize(value, index, end, "Edm.TimeOfDay", Lexer.TokenType.Literal);
@@ -484,7 +497,8 @@ export namespace PrimitiveLiteral {
                 if (!geo) return;
                 index = geo.next;
             }
-        } else index++;
+        }
+        else index++;
 
         return Lexer.tokenize(value, start, index, { items }, Lexer.TokenType.Literal);
     }

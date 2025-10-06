@@ -22,7 +22,8 @@ export namespace ArrayOrObject {
                 if (end > index) {
                     index = end;
                     break;
-                } else {
+                }
+                else {
                     let separator = Lexer.valueSeparator(value, index);
                     if (separator === index) return;
                     index = separator;
@@ -31,7 +32,8 @@ export namespace ArrayOrObject {
                     if (!token) return;
                 }
             }
-        } else {
+        }
+        else {
             let end = Lexer.endArray(value, index);
             if (end === index) return;
             index = end;
@@ -52,6 +54,7 @@ export namespace ArrayOrObject {
             ArrayOrObject.complexPropertyInUri(value, index) ||
             ArrayOrObject.collectionPropertyInUri(value, index) ||
             ArrayOrObject.navigationPropertyInUri(value, index);
+
         if (token) {
             while (token) {
                 items.push(token);
@@ -61,7 +64,8 @@ export namespace ArrayOrObject {
                 if (end > index) {
                     index = end;
                     break;
-                } else {
+                }
+                else {
                     let separator = Lexer.valueSeparator(value, index);
                     if (separator === index) return;
                     index = separator;
@@ -74,7 +78,8 @@ export namespace ArrayOrObject {
                     if (!token) return;
                 }
             }
-        } else {
+        }
+        else {
             let end = Lexer.endObject(value, index);
             if (end === index) return;
             index = end;
@@ -130,7 +135,8 @@ export namespace ArrayOrObject {
                 if (end > index) {
                     index = end;
                     break;
-                } else {
+                }
+                else {
                     let separator = Lexer.valueSeparator(value, index);
                     if (separator === index) return;
                     index = separator;
@@ -139,7 +145,8 @@ export namespace ArrayOrObject {
                     if (!token) return;
                 }
             }
-        } else {
+        }
+        else {
             let end = Lexer.endArray(value, index);
             if (end === index) return;
             index = end;
@@ -275,7 +282,8 @@ export namespace ArrayOrObject {
                 if (end > index) {
                     index = end;
                     break;
-                } else {
+                }
+                else {
                     let separator = Lexer.valueSeparator(value, index);
                     if (separator === index) return;
                     index = separator;
@@ -284,7 +292,8 @@ export namespace ArrayOrObject {
                     if (!token) return;
                 }
             }
-        } else {
+        }
+        else {
             let end = Lexer.endArray(value, index);
             if (end === index) return;
             index = end;
@@ -335,7 +344,8 @@ export namespace ArrayOrObject {
             if (escapeNext > escape) return escapeNext;
             let mark = Lexer.quotationMark(value, escape);
             if (mark > escape) return mark;
-        } else {
+        }
+        else {
             let mark = Lexer.quotationMark(value, index);
             if (mark === index) return index + 1;
         }
