@@ -21,15 +21,15 @@ export const parserFactory = function (
 
         if (!result) {
             const source = Utils.stringify(raw, 0, raw.length);
-            const marker = ' '.repeat(result.next) + '^';
+            const marker = ' '.repeat(pos) + '^';
             const at = source + "\n" + marker;
 
             throw new ODataV4ParseError({
                 msg: `Parse error at index ${pos}. No parse found.`,
                 source,
                 marker,
-                character: Utils.stringify(raw, result.next, result.next + 1),
-                index: result.next,
+                character: Utils.stringify(raw, pos, pos + 1),
+                index: pos,
                 at,
             });
         }
