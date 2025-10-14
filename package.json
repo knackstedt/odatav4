@@ -1,28 +1,31 @@
 {
-  "name": "@dotglitch/odatav4",
-  "version": "1.1.1",
-  "description": "Maintained ODataV4 adapter. Supports SurrealDB.",
-  "main": "dist/main.js",
-  "author": "Andrew G. Knackstedt",
-  "license": "MIT",
-  "files": [
-    "dist",
-    "readme.md"
-  ],
-  "scripts": {
-    "build": "tsc",
-    "test": "bun test"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.2.23",
-    "@types/jest": "^30.0.0",
-    "@types/node": "^22.18.8",
-    "ts-node": "^10.9.2",
-    "tslib": "^2.8.1",
-    "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "express": "^5.1.0",
-    "surrealdb": "^1.3.2"
-  }
+    "name": "@dotglitch/odatav4",
+    "version": "1.1.1",
+    "description": "Maintained ODataV4 adapter. Supports SurrealDB.",
+    "main": "dist/main.js",
+    "author": "Andrew G. Knackstedt",
+    "repository": {
+        "url": "https://github.com/knackstedt/odatav4"
+    },
+    "license": "MIT",
+    "files": [
+        "dist",
+        "readme.md"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "test": "bun test"
+    },
+    "devDependencies": {
+        "@types/bun": "^1.2.23",
+        "@types/jest": "^30.0.0",
+        "@types/node": "^22.18.8",
+        "ts-node": "^10.9.2",
+        "tslib": "^2.8.1",
+        "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "express": "^5.1.0",
+        "surrealdb": "^1.3.2"
+    }
 }
