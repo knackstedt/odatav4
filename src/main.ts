@@ -44,3 +44,6 @@ export function createFilter(odataFilter: string | Lexer.Token, options = <SqlOp
     let ast: Lexer.Token = <Lexer.Token>(typeof odataFilter == "string" ? filter(<string>odataFilter) : odataFilter);
     return new Visitor(options).Visit(ast).asType();
 }
+
+
+export * from "./express/odata-middleware";
