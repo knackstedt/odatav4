@@ -45,6 +45,7 @@ export class Visitor {
     parameters = new Map<string, any>();
     protected parameterSeed: number = 0;
     protected fieldSeed: number = 0;
+    protected selectSeed: number = 0;
     protected originalWhere: string;
     ast: Lexer.Token;
 
@@ -223,7 +224,6 @@ export class Visitor {
         context.target = "orderby";
         node.value.items.forEach((item, i) => {
             this.Visit(item, context);
-            // TODO: Security improvement: add surrealdb field escaping here.
             if (i < node.value.items.length - 1) this.orderby += ", ";
         });
     }
@@ -244,18 +244,21 @@ export class Visitor {
     protected VisitSelect(node: Lexer.Token, context: any) {
         context.target = "select";
         node.value.items.forEach((item, i) => {
-            // TODO: Security improvement: add surrealdb field escaping here.
             this.Visit(item, context);
             if (i < node.value.items.length - 1) this.select += ", ";
         });
     }
 
     protected VisitSelectItem(node: Lexer.Token, context: any) {
-        let item = node.raw.replace(/\//g, '.');
-        // >>>>>
-        console.log('VisitSelectItem', item);
-        // TODO: Security improvement: add surrealdb field escaping here.
-        this.select += `[${item}]`;
+        if (this.type == SQLLang.SurrealDB) {
+            const fieldSeed = `$s${this.selectSeed++}`;
+            this.parameters.set(fieldSeed, node.raw);
+            this.select += `type::field(${fieldSeed})`;
+        }
+        else {
+            let item = node.raw.replace(/\//g, '.');
+            this.select += `[${item}]`;
+        }
     }
 
     protected VisitAndExpression(node: Lexer.Token, context: any) {
@@ -271,7 +274,12 @@ export class Visitor {
 
     protected VisitOrExpression(node: Lexer.Token, context: any) {
         this.Visit(node.value.left, context);
-        this.where += " OR ";
+        if (this.type == SQLLang.SurrealDB) {
+            this.where += " || ";
+        }
+        else {
+            this.where += " OR ";
+        }
         this.Visit(node.value.right, context);
     }
 
