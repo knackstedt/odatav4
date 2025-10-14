@@ -183,13 +183,13 @@ export const ODataV4ToSurrealQL = (
     // Note: createQuery throws an error if there is leading or trailing whitespace on odata params
     // It also throws an error if there are query params that aren't known to the odata spec.
     // TODO: Strip unknown params instead of throwing an error?
-    const {
+    let {
         where, select, orderby, limit, skip, parameters
     } = hasFilter ? createQuery(odataQuery, {
         type: SQLLang.SurrealDB
-    }) : {} as Visitor;
+    }) : {  } as Visitor;
 
-    // TODO: should we run a pre-scan of the WHERE field as an additional safety measure?
+    parameters ??= new Map();
 
     // Initiate a query to count the number of total records that match
     const countQuery = [
@@ -224,8 +224,7 @@ export const RunODataV4SelectFilter = async (
     table: string,
     urlPath: string
 ) => {
-
-    const {
+    let {
         countQuery,
         entriesQuery,
         parameters,
@@ -235,8 +234,16 @@ export const RunODataV4SelectFilter = async (
         table,
         urlPath
     );
+    limit ??= 0;
+    skip ??= 0;
 
-    const includeMetadata = /[?&]$metadata/.test(urlPath);
+    // const includeMetadata = /[?&]$metadata/.test(urlPath);
+
+    // Surreal doesn't like parameters with a $ prefix
+    // so make a copy without them.
+    Object.keys(parameters).forEach(k => {
+        parameters[k.slice(1)] = parameters[k];
+    });
 
     let [
         countResult,
@@ -246,27 +253,29 @@ export const RunODataV4SelectFilter = async (
         db.query<any[]>(entriesQuery, parameters)
     ]);
     data ??= [];
-    // const count = countResult.count;
-    const pageSize = 100;
     const count = countResult?.[0]?.[0]?.count || 0;
+
+    const pageSize = 100;
 
     const url = new URL(urlPath);
     // // Rip off the path to prevent the base url from being contaminated.
     // const qParams = urlPath.includes("?") ? '' : urlPath.split("?").pop();
     // const pars = new URLSearchParams(qParams);
     url.searchParams.set('$skip', skip + data.length as any);
+    url.searchParams.set('$top', pageSize as any);
 
-    const metadata = includeMetadata
-        ? undefined
-        : await db.query(`INFO FOR TABLE ${table}`);
+    // const metadata = includeMetadata
+    //     ? undefined
+    //     : await db.query(`INFO FOR TABLE ${table}`);
 
+    const entriesRead = limit + skip;
     return {
-        '@odata.metadata': metadata,
-        '@odata.context': `${url.pathname}$metadata#${table}`,
+        // '@odata.metadata': metadata,
+        // '@odata.context': `${url.pathname}$metadata#${table}`,
         '@odata.count': count ?? data.length ?? 0,
-        '@odata.nextlink': (limit + skip) > (count as number)
+        '@odata.nextlink': (entriesRead) > (count as number)
             ? undefined
-            : `${url.pathname}/${table}?$skip=${limit + skip}&$top=${pageSize}`,
+            : `${url.pathname}?${url.searchParams.toString()}`,
         value: data
     };
 };
@@ -400,19 +409,19 @@ export const SurrealODataV4Middleware = (
      * Metadata endpoint must be first
      * TODO: actually match odata spec
      */
-    router.get('/$metadata#:table', route(async (req, res, next) => {
-        const table = req['_table'] as string;
-        const db = req.db as Surreal;
+    // router.get('/$metadata#:table', route(async (req, res, next) => {
+    //     const table = req['_table'] as string;
+    //     const db = req.db as Surreal;
 
-        if (!table) {
-            throw { status: 400, message: "Table not specified" };
-        }
+    //     if (!table) {
+    //         throw { status: 400, message: "Table not specified" };
+    //     }
 
-        const schemaFields = Object.keys((
-            (await db.query(`INFO FOR TABLE ` + table))[0][0].result as any)?.fd
-        );
-        res.send(schemaFields);
-    }));
+    //     const schemaFields = Object.keys((
+    //         (await db.query(`INFO FOR TABLE ` + table))[0][0].result as any)?.fd
+    //     );
+    //     res.send(schemaFields);
+    // }));
 
     /**
      *
@@ -425,25 +434,7 @@ export const SurrealODataV4Middleware = (
 
         // If the target includes a colon, then we're acting on 1 record
         if (id) {
-            const fetch = (() => {
-                const fetchPar = req.query['$fetch'];
-                if (!fetchPar) return '';
-
-                const fields = !Array.isArray(fetchPar) ? [fetchPar] : fetchPar;
-                const fetchStr = fields.join(", ");
-
-                // Validate that the format is generally safe to execute.
-                if (!/^(?:[a-zA-Z_\.]+?)(?:, [a-zA-Z_\.]+?)*$/.test(fetchStr))
-                    throw { status: 400, message: "Malformed $fetch" };
-
-                return fetchStr;
-            })();
-
-            if (/[⟨⟩;()\[\]`'"\|*]/.test(fetch)) {
-                throw new Error("Malformed symbol in fetch field.");
-            }
-
-            let _r = await db.query<[[any]]>(`SELECT * FROM $id ${fetch ? "FETCH " + fetch : ''}`, {
+            let _r = await db.query<[[any]]>(`SELECT * FROM $id`, {
                 id: new RecordId(table, id)
             });
             let [[result]] = _r;
@@ -485,9 +476,10 @@ export const SurrealODataV4Middleware = (
             }
         }
 
+        res.set("Content-Type", "application/json");
         res.send(JSON.stringify(result, (key, value) =>
             typeof value === 'bigint'
-                ? value.toString() ///!!!!
+                ? value.toString() // TODO: This may be lossy. Consider a different approach
                 : value // return everything else unchanged
         ));
     }));
