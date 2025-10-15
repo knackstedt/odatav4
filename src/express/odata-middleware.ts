@@ -3,49 +3,10 @@ import * as express from "express";
 import { route } from './util';
 
 import Surreal, { RecordId, StringRecordId } from 'surrealdb';
-import { createQuery, SQLLang } from '../main';
-import { Visitor } from '../visitor';
+import { createQuery, SQLLang } from '../parser/main';
+import { Visitor } from '../parser/visitor';
+import { ODataExpressConfig, ODataExpressTable } from '../types';
 
-// Set restrictions on who can read/write/update on a table.
-// If not present, the table will effectively have no permission
-// constraints
-export type ODataV4TableConfig = {
-    /**
-     *
-     */
-    [key: string]: {
-
-        accessControl?: {
-            read?: string[],
-            post?: string[],
-            patch?: string[],
-            delete?: string[],
-
-            // Write encompasses `post` `patch` and `delete` together.
-            write?: string[];
-            // Ensure that the user has at least one of the listed roles,
-            // for ANY of the methods
-            all?: string[];
-        };
-
-        afterGet?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        afterPost?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        afterPut?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        afterPatch?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        afterDelete?: (req: express.Request, record: Object) => Promise<Object> | Object;
-
-        beforePost?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        beforePut?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        beforePatch?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        beforeDelete?: (req: express.Request, record: Object) => Promise<Object> | Object;
-        beforeMutate?: (req: express.Request, record: Object) => Promise<Object> | Object;
-
-        /**
-         * PreProcess $filter strings
-         */
-        filterStringProcessor?: (req: express.Request, original: string) => string;
-    };
-};
 
 
 /**
@@ -60,12 +21,8 @@ export type ODataV4TableConfig = {
 
 /**
  * Validate that the authenticated user has access to the underlying table & object
- * @param req
- * @param tableConfigMap
- * @param object
- * @returns
  */
-const checkObjectAccess = (req: express.Request, tableConfigMap: ODataV4TableConfig, object?: Object) => {
+const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[], object?: Object) => {
     let targetId: string;
     let targetTable: string;
 
@@ -96,15 +53,11 @@ const checkObjectAccess = (req: express.Request, tableConfigMap: ODataV4TableCon
         targetId = targetId.slice(1, -1);
     }
 
-    // if (targetId && !/^[0-9A-Za-z]{20,}$/.test(targetId))
-    //     throw { status: 400, message: "Invalid resource" };
+    if (!targetTable) {
+        throw { status: 400, message: "Table not specified" };
+    }
 
-
-    // Verify the table name is semantically valid
-    if (/[^a-zA-Z0-9_-]/.test(targetTable))
-        throw { status: 400, message: "Malformed target" };
-
-    const tableConfig = tableConfigMap[targetTable];
+    const tableConfig = tables.find(t => t.table == targetTable);
 
     if (!tableConfig)
         throw { status: 404, message: "Not Found" };
@@ -119,6 +72,11 @@ const checkObjectAccess = (req: express.Request, tableConfigMap: ODataV4TableCon
 
         const groups = req.session.profile.roles;
         const { read, patch, delete: del, post, write, all } = tableConfig.accessControl;
+
+        if (all) {
+            if (!all.find(r => groups.includes(r)))
+                throw { status: 403, message: "Forbidden" };
+        }
 
         if (read && req.method == 'get') {
             if (!read.find(r => groups.includes(r)))
@@ -258,11 +216,10 @@ export const RunODataV4SelectFilter = async (
     const pageSize = 100;
 
     const url = new URL(urlPath);
-    // // Rip off the path to prevent the base url from being contaminated.
-    // const qParams = urlPath.includes("?") ? '' : urlPath.split("?").pop();
-    // const pars = new URLSearchParams(qParams);
     url.searchParams.set('$skip', skip + data.length as any);
     url.searchParams.set('$top', pageSize as any);
+
+    // TODO: Implement metadata
 
     // const metadata = includeMetadata
     //     ? undefined
@@ -283,13 +240,18 @@ export const RunODataV4SelectFilter = async (
 
 const ODataCRUDMethods = async (
     connection: Surreal,
-    tableConfigMap: ODataV4TableConfig,
-    req: express.Request,
-    idGenerator?: (item: any) => string
+    config: ODataExpressConfig,
+    req: express.Request
 ) => {
+    const {
+        tables,
+        idGenerator,
+        // hooks
+    } = config;
+
     const isBulk = Array.isArray(req.body);
-    const beforeMethod = 'before' + req.method.slice(0, 1) + req.method.toLowerCase().slice(1);
-    const afterMethod = 'after' + req.method.slice(0, 1) + req.method.toLowerCase().slice(1);
+    const beforeMethod = 'beforeRecord' + req.method.slice(0, 1) + req.method.toLowerCase().slice(1);
+    const afterMethod = 'afterRecord' + req.method.slice(0, 1) + req.method.toLowerCase().slice(1);
 
     const accessResult = Symbol("private");
 
@@ -307,15 +269,15 @@ const ODataCRUDMethods = async (
 
     // If there is a preprocessor, apply it on all records to be inserted.
     items = await Promise.all(items.map(async item => {
-        const { id, table, tableConfig } = checkObjectAccess(req, tableConfigMap, item);
+        const { id, table, tableConfig } = checkObjectAccess(req, tables, item);
 
         if (typeof tableConfig[beforeMethod] == "function") {
             item = await tableConfig[beforeMethod](req, item);
         }
 
         // Support a generic mutate handler
-        if (["POST", "PUT", "PATCH"].includes(req.method) && tableConfig.beforeMutate) {
-            item = await tableConfig.beforeMutate(req, item) as any;
+        if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && tableConfig.beforeRecordMutate) {
+            item = await tableConfig.beforeRecordMutate(req, item) as any;
         }
 
         item[accessResult] = {
@@ -329,17 +291,11 @@ const ODataCRUDMethods = async (
         const { id, table } = item[accessResult];
         const db = connection;
 
-        if (req['_auditUserOverride']) {
-            db.let("fiq.user", req['_auditUserOverride']);
-        }
-        else {
-            db.let("fiq.user", req.session.userInfo.email);
-        }
-
         const rid = id == null ? null : new RecordId(table, id);
+
         let result;
         if (req.method == "POST") {
-            const id = new RecordId(table, idGenerator(item));
+            const id = new RecordId(table, await idGenerator(item));
             delete item.id;
             delete item['history'];
             result = await db.create(id, item);
@@ -374,8 +330,14 @@ const ODataCRUDMethods = async (
             accessResult
         } = r;
 
+        if (req.method != "GET") {
+            if (typeof accessResult.tableConfig.afterRecordMutate == "function") {
+                accessResult.tableConfig.afterRecordMutate(req, result);
+            }
+        }
+
         if (typeof accessResult.tableConfig[afterMethod] == "function") {
-            accessResult.tableConfig[afterMethod](req, r);
+            accessResult.tableConfig[afterMethod](req, result);
         }
         return r;
     }));
@@ -394,9 +356,20 @@ const ODataCRUDMethods = async (
 };
 
 export const SurrealODataV4Middleware = (
-    tableConfigMap: ODataV4TableConfig,
-    connection: Surreal | ((req: express.Request) => Promise<Surreal> | Surreal),
+    config: ODataExpressConfig
 ) => {
+    const {
+        resolveDb: connection,
+        tables,
+        // idGenerator,
+        // defaultPageSize = 100,
+        // maxPageSize = 1000,
+        // hooks
+    } = config;
+
+    if (!connection) {
+        throw new Error("No connection resolver specified");
+    }
 
     const router = express.Router();
 
@@ -430,7 +403,7 @@ export const SurrealODataV4Middleware = (
         if (req.method != "GET") return next();
         const db = req.db as Surreal;
 
-        const { tableConfig, table, id } = checkObjectAccess(req, tableConfigMap);
+        const { tableConfig, table, id } = checkObjectAccess(req, tables);
 
         // If the target includes a colon, then we're acting on 1 record
         if (id) {
@@ -439,11 +412,13 @@ export const SurrealODataV4Middleware = (
             });
             let [[result]] = _r;
 
-            if (typeof tableConfig.afterGet == "function")
-                result = await tableConfig.afterGet(req, result);
+            if (typeof tableConfig.afterRecordGet == "function")
+                result = await tableConfig.afterRecordGet(req, result);
 
             if (!result) {
-                // 404?
+                res.contentType("application/json");
+                res.send('{}');
+                return;
             }
 
             res.contentType("application/json");
@@ -458,10 +433,10 @@ export const SurrealODataV4Middleware = (
 
         let url = new URL(req.protocol + "://" + req.hostname + req.originalUrl);
 
-        if (tableConfig.filterStringProcessor) {
-            const query = tableConfig.filterStringProcessor(req, url.searchParams['$filter'] || '');
-            url.search = query;
-        }
+        // if (tableConfig.filterStringProcessor) {
+        //     const query = tableConfig.filterStringProcessor(req, url.searchParams['$filter'] || '');
+        //     url.search = query;
+        // }
 
         const result = await RunODataV4SelectFilter(
             db,
@@ -469,10 +444,10 @@ export const SurrealODataV4Middleware = (
             url.toString()
         );
 
-        if (typeof tableConfig.afterGet == "function") {
+        if (typeof tableConfig.afterRecordGet == "function") {
             for (let i = 0; i < result.value.length; i++) {
                 const item = result.value[i];
-                result.value[i] = await tableConfig.afterGet(req, item);
+                result.value[i] = await tableConfig.afterRecordGet(req, item);
             }
         }
 
@@ -491,7 +466,7 @@ export const SurrealODataV4Middleware = (
     router.use(route(async (req, res, next) => {
         const db = req.db as Surreal;
 
-        const result = await ODataCRUDMethods(db, tableConfigMap, req);
+        const result = await ODataCRUDMethods(db, config, req);
         res.send(Array.isArray(result) ? result.map(r => r.result) : result.result);
     }));
 

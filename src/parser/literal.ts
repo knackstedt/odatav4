@@ -1,4 +1,4 @@
-import { ODataV4ParseError } from './parser/utils';
+import { ODataV4ParseError } from './utils';
 
 function integer(value: string): number {
     return +value;

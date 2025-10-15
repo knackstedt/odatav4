@@ -1,7 +1,7 @@
 import { Literal } from "./literal";
 import { SqlOptions } from "./main";
-import Lexer from './parser/lexer';
-import { ODataV4ParseError } from './parser/utils';
+import Lexer from './lexer';
+import { ODataV4ParseError } from './utils';
 
 export class SQLLiteral extends Literal {
     static convert(type: string, value: string): any {
