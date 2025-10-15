@@ -17,37 +17,45 @@ Additionally, this fork provides a customizable Express middleware that lets you
 
 ```typescript
 import express from 'express';
-import { ODataV4TableConfig, SurrealODataV4Middleware } from '@dotglitch/odatav4';
-import { StringRecordId } from 'surrealdb';
+import { SurrealODataV4Middleware } from '@dotglitch/odatav4';
+import type { ODataExpressTable } from '@dotglitch/odatav4';
 
-export const coreTableConfig: ODataV4TableConfig = {
-    "car": {
-        accessControl: {
-            // The only users who may write to the table must have the role "administrator".
-            write: ["administrator"],
-        }
-    },
-    "telemetry": {
-        accessControl: {
-            // Users need the administrator role to read from the table. Anyone may write to the table.
-            read: ["administrator"],
-        }
-    },
-    "email_message": {
-        // A hook that runs after the item was fetched from the database.
-        afterGet: async item => {
-            item.calculated_field = {...};
-            return item;
-        },
-        // A hook that runs before a mutation operation (PATCH/PUT/POST)
-        beforeMutate: async item => {
-            item.updatedOn = new Date();
-            item.originalEmail = new StringRecordId(item.originalEmail);
-            return item;
-        }
+const ODataV4Controller = SurrealODataV4Middleware({
+    tables: [
+        new ODataExpressTable({
+            table: "vehicle",
+            accessControl: {
+                // Anyone can read, but only admins can write.
+                write: ["administrator"]
+            }
+        }),
+        new ODataExpressTable({
+            table: "feedback",
+            accessControl: {
+                // Only admins can read the table, but anyone logged in can perform an insert.
+                read: ["administrator"],
+                patch: ["administrator"],
+                put: ["administrator"],
+                delete: ["administrator"]
+                // post is allowed, so we'll leave it undefined. 
+            }
+        }),
+        new ODataExpressTable({
+            table: "geolocation",
+            afterRecordGet: async item => {
+                const { data: location } = await axios.get("https://api.example.com/v1/resolveLocation?id=" + item.id);
+                item.location = location;
+                return item;
+            }
+        })
+    ],
+    resolveDb(req) {
+        // A database resolver that allows you to customize which Surreal instance
+        // the ODataV4 query is executed against. This can be used to utilize a user
+        // connection, connection pools, custom variables and more.
+        return req.db;
     }
-};
-const ODataV4Controller = SurrealODataV4Middleware(coreTableConfig, (req) => req.db);
+});
 
 const app = express();
 app.use("/api/v1/odata/", ODataV4Controller);
