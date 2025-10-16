@@ -147,11 +147,17 @@ export type ODataExpressConfig = {
     tables: ODataExpressTable<any>[]
 
     /**
-     *
-     * @param item
-     * @returns
+     * Method to generate IDs for new records if no ID is provided.
+     * By default it will use SurrealDB's built-in ID generation in ULID mode.
      */
     idGenerator?: (item: Record<any, any>) => Promise<string> | string,
+
+    /**
+     * Optional variables to pass to every query.
+     * Can be a static object or a function that returns an object or a promise of an object.
+     */
+    variables?: Record<any, any> | ((req: express.Request, item: Record<any, any>) => Record<any, any> | Promise<Record<any, any>>);
+
     /**
      * Global hooks that apply to all tables.
      */

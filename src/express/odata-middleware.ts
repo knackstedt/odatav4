@@ -66,7 +66,7 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
      * Perform an operation access check.
      */
     if (tableConfig?.accessControl) {
-        if (!req.session.profile) {
+        if (!req.session?.profile) {
             throw { status: 403, message: "Forbidden" };
         }
 
@@ -243,7 +243,7 @@ const ODataCRUDMethods = async (
     config: ODataExpressConfig,
     req: express.Request
 ) => {
-    const {
+    let {
         tables,
         idGenerator,
         // hooks
@@ -266,6 +266,10 @@ const ODataCRUDMethods = async (
 
     // Remove any empty items.
     items = items.filter(i => i !== null && i !== undefined);
+
+    if (!items || items.length == 0) {
+        throw { status: 400, message: "No data provided" };
+    }
 
     // If there is a preprocessor, apply it on all records to be inserted.
     items = await Promise.all(items.map(async item => {
@@ -293,25 +297,59 @@ const ODataCRUDMethods = async (
 
         const rid = id == null ? null : new RecordId(table, id);
 
+        const variables = await (
+            typeof config.variables == 'function'
+                ? config.variables(req, item)
+                : config.variables
+        ) || [];
+
+        idGenerator ??= async () => {
+            return db.query<[string]>('RETURN rand::ulid().lowercase()')
+                .then(r => r[0]);
+        }
+
         let result;
         if (req.method == "POST") {
             const id = new RecordId(table, await idGenerator(item));
             delete item.id;
-            delete item['history'];
-            result = await db.create(id, item);
+            const results = await db.query(`CREATE type::record($id) CONTENT $content`, {
+                id,
+                content: item,
+                ...variables
+            });
+            result = results.pop()[0];
         }
         else if (req.method == "PATCH") {
+            // if (!item.id) {
+            //     throw { status: 400, message: "ID is required in body for PATCH" };
+            // }
+
             item.id = new StringRecordId(item.id) as any;
-            delete item['history'];
+            delete item.id;
             result = await db.merge(rid, item);
+            const results = await db.query(`UPDATE type::record($id) MERGE $content`, {
+                id: rid,
+                content: item,
+                ...variables
+            });
+            result = results.pop()[0];
         }
         else if (req.method == "PUT") {
             delete item.id;
-            item['history'] = item['history']?.map(h => new StringRecordId(h));
-            result = await db.upsert(rid, item);
+            const results = await db.query(`UPSERT type::record($id) CONTENT $content`, {
+                id: rid,
+                content: item,
+                ...variables
+            });
+            result = results.pop()[0];
         }
         else if (req.method == "DELETE") {
             result = await db.delete(rid);
+            const results = await db.query(`DELETE type::record($id)`, {
+                id: rid,
+                ...variables
+            });
+            result = results.pop()[0];
         }
         else {
             throw { status: 400, message: "Invalid method" };
