@@ -251,7 +251,7 @@ export class Visitor {
 
     protected VisitSelectItem(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
-            const fieldSeed = `$s${this.selectSeed++}`;
+            const fieldSeed = `$select${this.selectSeed++}`;
             this.parameters.set(fieldSeed, node.raw);
             this.select += `type::field(${fieldSeed})`;
         }
@@ -281,6 +281,35 @@ export class Visitor {
             this.where += " OR ";
         }
         this.Visit(node.value.right, context);
+    }
+
+    protected VisitInExpression(node: Lexer.Token, context: any) {
+        if (this.type == SQLLang.SurrealDB) {
+            this.Visit(node.value.left, context);
+            this.where += " in [";
+
+            const items = [];
+            for (let i = 0; i < node.value.right.values.length; i++) {
+                const item = node.value.right.values[i];
+
+                // this.VisitLiteral(node.value.right.values[i], context);
+                const value = Literal.convert(item.value, item.raw);
+
+                const seed = `$param${this.parameterSeed++}`;
+                this.parameters.set(seed, value);
+                items.push(seed);
+
+                if (typeof value == "string" && /(?<=[^\\]|^):/.test(value)) {
+                    // We will optionally handle SurrealDB IDs here.
+                    // This emits both the string value and the record type.
+                    // e.g. field IN ['scan:01K7HT1EMX3EYE19M1MGQ36D7K', type::record('scan:01K7HT1EMX3EYE19M1MGQ36D7K')]
+                    items.push(`type::record(${seed})`);
+                }
+            }
+            this.where += items.join(", ");
+
+            this.where += "]";
+        }
     }
 
     protected VisitBoolParenExpression(node: Lexer.Token, context: any) {
@@ -327,7 +356,7 @@ export class Visitor {
 
     protected VisitODataIdentifier(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
-            const fieldSeed = `$f${this.fieldSeed++}`;
+            const fieldSeed = `$field${this.fieldSeed++}`;
             this.parameters.set(fieldSeed, node.value.name);
             this[context.target] += `type::field(${fieldSeed})`;
         }
@@ -338,14 +367,40 @@ export class Visitor {
     }
 
     protected VisitEqualsExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
-        this.where += " = ";
-        this.Visit(node.value.right, context);
+        if (this.type == SQLLang.SurrealDB) {
+            if (
+                node.value.right.type == Lexer.TokenType.Literal &&
+                node.value.right.value == "Edm.String" &&
+                /(?<=[^\\]|^):/.test(node.value.right.raw)
+            ) {
+                // We will optionally handle SurrealDB IDs here.
+                // This emits an equals expression that checks both the string value and the record type.
+                // e.g. (field = 'scan:01K7HT1EMX3EYE19M1MGQ36D7K' || field = type::record('scan:01K7HT1EMX3EYE19M1MGQ36D7K'))
+                this.where += "(";
+                this.Visit(node.value.left, context);
+                this.where += " = ";
+                this.Visit(node.value.right, context);
+                this.where += ") || (";
+                this.Visit(node.value.left, context);
+                this.where += " = type::record(";
+                this.Visit(node.value.right, context);
+                this.where += "))";
+            }
+            else {
+                // this isn't possibly a SurrealDB ID, so do normal equals handling.
+                this.Visit(node.value.left, context);
+                this.where += " = ";
+                this.Visit(node.value.right, context);
+            }
+        }
+        else {
+            this.Visit(node.value.left, context);
+            this.where += " = ";
+            this.Visit(node.value.right, context);
 
-        if (this.type != SQLLang.SurrealDB) {
             // FIX: This is a hack.
             if (this.options.useParameters && context.literal == null) {
-                this.where = this.where.replace(/= \$l\d+$/, "IS NULL")
+                this.where = this.where.replace(/= \$literal\d+$/, "IS NULL")
                     .replace(new RegExp(`\\? = \\[${context.identifier}\\]$`), `[${context.identifier}] IS NULL`);
             }
             else if (context.literal == "NULL") {
@@ -363,7 +418,7 @@ export class Visitor {
         if (this.type != SQLLang.SurrealDB) {
             // FIX: This is a hack.
             if (this.options.useParameters && context.literal == null) {
-                this.where = this.where.replace(/(?:<>|!=) \$l\d+$/, "IS NOT NULL")
+                this.where = this.where.replace(/(?:<>|!=) \$literal\d+$/, "IS NOT NULL")
                     .replace(new RegExp(`\\? (?:<>|!=) \\[${context.identifier}\\]$`), `[${context.identifier}] IS NOT NULL`);
             }
             else if (context.literal == "NULL") {
@@ -399,7 +454,7 @@ export class Visitor {
 
     protected VisitLiteral(node: Lexer.Token, context: any) {
         if (this.options.useParameters) {
-            let name = `$l${this.parameterSeed++}`;
+            let name = `$literal${this.parameterSeed++}`;
             let value = Literal.convert(node.value, node.raw);
 
             context.literal = value;
@@ -413,7 +468,7 @@ export class Visitor {
         const method = node.value.method;
         const params = node.value.parameters || [];
         let fn: string;
-        const name = `$p${this.parameterSeed++}`;
+        const name = `$param${this.parameterSeed++}`;
 
         switch (method) {
             case "contains":

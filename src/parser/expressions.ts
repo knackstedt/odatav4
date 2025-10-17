@@ -55,7 +55,8 @@ export namespace Expressions {
                 leExpr(value, token.next) ||
                 gtExpr(value, token.next) ||
                 geExpr(value, token.next) ||
-                hasExpr(value, token.next);
+                hasExpr(value, token.next) ||
+                inExpr(value, token.next);
 
             if (commonMoreExpr) {
                 token.value = {
@@ -95,14 +96,14 @@ export namespace Expressions {
     }
 
     export function andExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (
             rws === index ||
             !Utils.stringify(value, rws, rws+3).toLowerCase().startsWith("and")
         ) return;
         let start = index;
         index = rws + 3;
-        rws = Lexer.RWS(value, index);
+        rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         index = rws;
         let token = boolCommonExpr(value, index);
@@ -112,14 +113,14 @@ export namespace Expressions {
     }
 
     export function orExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (
             rws === index ||
             !Utils.stringify(value, rws, rws + 2).toLowerCase().startsWith("or")
         ) return;
         let start = index;
         index = rws + 2;
-        rws = Lexer.RWS(value, index);
+        rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         index = rws;
         let token = boolCommonExpr(value, index);
@@ -128,8 +129,59 @@ export namespace Expressions {
         return Lexer.tokenize(value, start, index, token, Lexer.TokenType.OrExpression);
     }
 
+    export function inExpr(value: Utils.SourceArray, index: number): Lexer.Token {
+        let rws = Lexer.SKIPWHITESPACE(value, index);
+        if (rws === index) return;
+        let start = index;
+        index = rws;
+        if (
+            !Utils.stringify(value, index, index + 2).toLowerCase().startsWith("in")
+        ) return;
+        index += 2;
+        rws = Lexer.SKIPWHITESPACE(value, index);
+        if (rws === index) return;
+        index = rws;
+
+        // Handle collection expression - could be a parenthesized list or a common expression
+        let open = Lexer.OPEN(value, index);
+        if (!open) return;
+        index = open;
+        index = Lexer.SKIPWHITESPACE(value, index);
+
+        // Parse comma-separated list of expressions
+        const items = [];
+        let expr = commonExpr(value, index);
+
+        while (expr) {
+            items.push(expr.value);
+            index = expr.next;
+            index = Lexer.SKIPWHITESPACE(value, index);
+
+            const comma = Lexer.COMMA(value, index);
+            if (comma) {
+                index = comma;
+                index = Lexer.SKIPWHITESPACE(value, index);
+                expr = commonExpr(value, index);
+                if (!expr) return; // Invalid format - expected expression after comma
+            } else {
+                break;
+            }
+        }
+
+        if (items.length === 0) return; // Empty collection is invalid
+
+        let close = Lexer.CLOSE(value, index);
+        if (!close) return;
+        index = close;
+
+        return Lexer.tokenize(value, start, index, {
+            values: items
+        }, Lexer.TokenType.InExpression);
+
+    }
+
     export function leftRightExpr(value: Utils.SourceArray, index: number, expr: string, tokenType: Lexer.TokenType): Lexer.Token {
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         let start = index;
         index = rws;
@@ -137,7 +189,7 @@ export namespace Expressions {
             !Utils.stringify(value, index, index + expr.length).toLowerCase().startsWith(expr.toLowerCase())
         ) return;
         index += expr.length;
-        rws = Lexer.RWS(value, index);
+        rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         index = rws;
         let token = commonExpr(value, index);
@@ -166,7 +218,7 @@ export namespace Expressions {
 
         let start = index;
         index += 3;
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         index = rws;
         let token = boolCommonExpr(value, index);
@@ -180,10 +232,10 @@ export namespace Expressions {
         if (!open) return;
         let start = index;
         index = open;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let token = boolCommonExpr(value, index);
         if (!token) return;
-        index = Lexer.BWS(value, token.next);
+        index = Lexer.SKIPWHITESPACE(value, token.next);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
@@ -195,10 +247,10 @@ export namespace Expressions {
         if (!open) return;
         let start = index;
         index = open;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let token = commonExpr(value, index);
         if (!token) return;
-        index = Lexer.BWS(value, token.next);
+        index = Lexer.SKIPWHITESPACE(value, token.next);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
@@ -251,7 +303,7 @@ export namespace Expressions {
         let open = Lexer.OPEN(value, index);
         if (!open) return;
         index = open;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         const parameters = [];
         if (min > 0) {
@@ -261,17 +313,17 @@ export namespace Expressions {
                 else if (expr) {
                     parameters.push(expr.value);
                     index = expr.next;
-                    index = Lexer.BWS(value, index);
+                    index = Lexer.SKIPWHITESPACE(value, index);
                     let comma = Lexer.COMMA(value, index);
                     if (parameters.length < min && !comma) return;
                     if (comma) index = comma;
                     else break;
-                    index = Lexer.BWS(value, index);
+                    index = Lexer.SKIPWHITESPACE(value, index);
                 }
                 else break;
             }
         }
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
@@ -324,20 +376,20 @@ export namespace Expressions {
         let open = Lexer.OPEN(value, index);
         if (!open) return;
         index = open;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let expr = commonExpr(value, index);
         if (expr) {
             index = expr.next;
-            index = Lexer.BWS(value, index);
+            index = Lexer.SKIPWHITESPACE(value, index);
             let comma = Lexer.COMMA(value, index);
             if (!comma) return;
             index = comma;
-            index = Lexer.BWS(value, index);
+            index = Lexer.SKIPWHITESPACE(value, index);
         }
         let typeName = NameOrIdentifier.qualifiedTypeName(value, index);
         if (!typeName) return;
         index = typeName.next;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
@@ -354,20 +406,20 @@ export namespace Expressions {
         let open = Lexer.OPEN(value, index);
         if (!open) return;
         index = open;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let expr = commonExpr(value, index);
         if (expr) {
             index = expr.next;
-            index = Lexer.BWS(value, index);
+            index = Lexer.SKIPWHITESPACE(value, index);
             let comma = Lexer.COMMA(value, index);
             if (!comma) return;
             index = comma;
-            index = Lexer.BWS(value, index);
+            index = Lexer.SKIPWHITESPACE(value, index);
         }
         let typeName = NameOrIdentifier.qualifiedTypeName(value, index);
         if (!typeName) return;
         index = typeName.next;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
@@ -382,7 +434,7 @@ export namespace Expressions {
         if (value[index] !== 0x2d) return;
         let start = index;
         index++;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let expr = commonExpr(value, index);
         if (!expr) return;
 
@@ -484,21 +536,21 @@ export namespace Expressions {
         let open = Lexer.OPEN(value, index);
         if (!open) return;
         index = open;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let variable = lambdaVariableExpr(value, index);
         let predicate;
         if (variable) {
             index = variable.next;
-            index = Lexer.BWS(value, index);
+            index = Lexer.SKIPWHITESPACE(value, index);
             let colon = Lexer.COLON(value, index);
             if (!colon) return;
             index = colon;
-            index = Lexer.BWS(value, index);
+            index = Lexer.SKIPWHITESPACE(value, index);
             predicate = lambdaPredicateExpr(value, index);
             if (!predicate) return;
             index = predicate.next;
         }
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
@@ -517,24 +569,24 @@ export namespace Expressions {
         if (!open) return;
         index = open;
 
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let variable = lambdaVariableExpr(value, index);
         if (!variable) return;
         index = variable.next;
 
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let colon = Lexer.COLON(value, index);
         if (!colon) return;
         index = colon;
 
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let predicate = lambdaPredicateExpr(value, index);
         if (!predicate) return;
         index = predicate.next;
 
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let close = Lexer.CLOSE(value, index);
         if (!close) return;

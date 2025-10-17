@@ -156,7 +156,7 @@ export namespace PrimitiveLiteral {
                         let close = Lexer.CLOSE(value, index);
                         let comma = Lexer.COMMA(value, index);
                         let amp = value[index] === 0x26;
-                        if (Lexer.pcharNoSQUOTE(value, index) > index && !amp && !close && !comma && Lexer.RWS(value, index) === index) return;
+                        if (Lexer.pcharNoSQUOTE(value, index) > index && !amp && !close && !comma && Lexer.SKIPWHITESPACE(value, index) === index) return;
                         break;
                     }
                     else {
@@ -164,7 +164,7 @@ export namespace PrimitiveLiteral {
                     }
                 }
                 else {
-                    let nextIndex = Math.max(Lexer.RWS(value, index), Lexer.pcharNoSQUOTE(value, index));
+                    let nextIndex = Math.max(Lexer.SKIPWHITESPACE(value, index), Lexer.pcharNoSQUOTE(value, index));
                     if (nextIndex === index) return;
                     index = nextIndex;
                 }
@@ -340,7 +340,7 @@ export namespace PrimitiveLiteral {
         let longitude = PrimitiveLiteral.doubleValue(value, index);
         if (!longitude) return;
 
-        let next = Lexer.RWS(value, longitude.next);
+        let next = Lexer.SKIPWHITESPACE(value, longitude.next);
         if (next === longitude.next) return;
 
         let latitude = PrimitiveLiteral.doubleValue(value, next);

@@ -58,6 +58,7 @@ enum tokenTypes {
     LesserOrEqualsExpression = "LesserOrEqualsExpression",
     GreaterThanExpression = "GreaterThanExpression",
     GreaterOrEqualsExpression = "GreaterOrEqualsExpression",
+    InExpression = "InExpression",
     HasExpression = "HasExpression",
     AddExpression = "AddExpression",
     SubExpression = "SubExpression",
@@ -174,6 +175,7 @@ export namespace Lexer {
         type: TokenType;
         raw: string;
 
+        // This has too many types to enumerate right now
         value: any;
         metadata: any;
 
@@ -258,7 +260,7 @@ export namespace Lexer {
         else if (Lexer.SP(value[index]) || Lexer.HTAB(value[index]) || value[index] === 0x20 || value[index] === 0x09) return 1;
     }
 
-    export function OWS(value: Utils.SourceArray, index: number): number {
+    export function SKIPWHITESPACE(value: Utils.SourceArray, index: number): number {
         index = index || 0;
         let inc = Lexer.whitespaceLength(value, index);
         while (inc) {
@@ -266,12 +268,6 @@ export namespace Lexer {
             inc = Lexer.whitespaceLength(value, index);
         }
         return index;
-    }
-    export function RWS(value: Utils.SourceArray, index: number): number {
-        return Lexer.OWS(value, index);
-    }
-    export function BWS(value: Utils.SourceArray, index: number): number {
-        return Lexer.OWS(value, index);
     }
 
     export function AT(value: Utils.SourceArray, index: number): number {
@@ -355,7 +351,7 @@ export namespace Lexer {
         else return Lexer.pctEncoded(value, index) || Lexer.otherDelims(value, index) || index;
     }
     export function qcharNoAMPDQUOTE(value: Utils.SourceArray, index: number): number {
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         if (Lexer.unreserved(value[index]) || value[index] === 0x3a || value[index] === 0x40 || value[index] === 0x2f || value[index] === 0x3f || value[index] === 0x24 || value[index] === 0x27 || value[index] === 0x3d) return index + 1;
         else return Lexer.otherDelims(value, index) || Lexer.pctEncodedUnescaped(value, index);
     }
@@ -451,47 +447,47 @@ export namespace Lexer {
         return Lexer.identifierLeadingCharacter(value) || Lexer.DIGIT(value);
     }
     export function beginObject(value: Utils.SourceArray, index: number): number {
-        let bws = Lexer.BWS(value, index);
+        let bws = Lexer.SKIPWHITESPACE(value, index);
         let start = index;
         index = bws;
         if (Utils.equals(value, index, "{")) index++;
         else if (Utils.equals(value, index, "%7B")) index += 3;
         if (index === bws) return start;
 
-        bws = Lexer.BWS(value, index);
+        bws = Lexer.SKIPWHITESPACE(value, index);
         return bws;
     }
     export function endObject(value: Utils.SourceArray, index: number): number {
-        let bws = Lexer.BWS(value, index);
+        let bws = Lexer.SKIPWHITESPACE(value, index);
         let start = index;
         index = bws;
         if (Utils.equals(value, index, "}")) index++;
         else if (Utils.equals(value, index, "%7D")) index += 3;
         if (index === bws) return start;
 
-        bws = Lexer.BWS(value, index);
+        bws = Lexer.SKIPWHITESPACE(value, index);
         return bws;
     }
     export function beginArray(value: Utils.SourceArray, index: number): number {
-        let bws = Lexer.BWS(value, index);
+        let bws = Lexer.SKIPWHITESPACE(value, index);
         let start = index;
         index = bws;
         if (Utils.equals(value, index, "[")) index++;
         else if (Utils.equals(value, index, "%5B")) index += 3;
         if (index === bws) return start;
 
-        bws = Lexer.BWS(value, index);
+        bws = Lexer.SKIPWHITESPACE(value, index);
         return bws;
     }
     export function endArray(value: Utils.SourceArray, index: number): number {
-        let bws = Lexer.BWS(value, index);
+        let bws = Lexer.SKIPWHITESPACE(value, index);
         let start = index;
         index = bws;
         if (Utils.equals(value, index, "]")) index++;
         else if (Utils.equals(value, index, "%5D")) index += 3;
         if (index === bws) return start;
 
-        bws = Lexer.BWS(value, index);
+        bws = Lexer.SKIPWHITESPACE(value, index);
         return bws;
     }
     export function quotationMark(value: Utils.SourceArray, index: number): number {
@@ -500,23 +496,23 @@ export namespace Lexer {
         return index;
     }
     export function nameSeparator(value: Utils.SourceArray, index: number): number {
-        let bws = Lexer.BWS(value, index);
+        let bws = Lexer.SKIPWHITESPACE(value, index);
         let start = index;
         index = bws;
         let colon = Lexer.COLON(value, index);
         if (!colon) return start;
         index = colon;
-        bws = Lexer.BWS(value, index);
+        bws = Lexer.SKIPWHITESPACE(value, index);
         return bws;
     }
     export function valueSeparator(value: Utils.SourceArray, index: number): number {
-        let bws = Lexer.BWS(value, index);
+        let bws = Lexer.SKIPWHITESPACE(value, index);
         let start = index;
         index = bws;
         let comma = Lexer.COMMA(value, index);
         if (!comma) return start;
         index = comma;
-        bws = Lexer.BWS(value, index);
+        bws = Lexer.SKIPWHITESPACE(value, index);
         return bws;
     }
     export function escape(value: Utils.SourceArray, index: number): number {

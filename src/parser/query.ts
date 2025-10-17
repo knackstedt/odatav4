@@ -397,11 +397,11 @@ export namespace Query {
     }
 
     export function searchNotExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (!Utils.equals(value, rws, "NOT")) return;
         let start = index;
         index = rws + 3;
-        rws = Lexer.RWS(value, index);
+        rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         index = rws;
         let expr = Query.searchPhrase(value, index) ||
@@ -413,11 +413,11 @@ export namespace Query {
     }
 
     export function searchOrExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index || !Utils.equals(value, rws, "OR")) return;
         let start = index;
         index = rws + 2;
-        rws = Lexer.RWS(value, index);
+        rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         index = rws;
         let token = Query.searchExpr(value, index);
@@ -428,11 +428,11 @@ export namespace Query {
     }
 
     export function searchAndExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index || !Utils.equals(value, rws, "AND")) return;
         let start = index;
         index = rws + 3;
-        rws = Lexer.RWS(value, index);
+        rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws === index) return;
         index = rws;
         let token = Query.searchExpr(value, index);
@@ -479,13 +479,13 @@ export namespace Query {
         if (!open) return;
         let start = index;
         index = open;
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let expr = Query.searchExpr(value, index);
         if (!expr) return;
         index = expr.next;
 
-        index = Lexer.BWS(value, index);
+        index = Lexer.SKIPWHITESPACE(value, index);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
@@ -588,7 +588,7 @@ export namespace Query {
         index = expr.next;
 
         let direction = 1;
-        let rws = Lexer.RWS(value, index);
+        let rws = Lexer.SKIPWHITESPACE(value, index);
         if (rws > index) {
             index = rws;
             if (Utils.equals(value, index, "asc")) index += 3;
