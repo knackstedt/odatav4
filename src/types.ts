@@ -139,7 +139,7 @@ export type ODataExpressConfig = {
      * @param recordId
      * @returns
      */
-    resolveDb: (req: express.request) => Surreal | Promise<Surreal>,
+    resolveDb: (req: express.Request) => Surreal | Promise<Surreal>,
 
     /**
      * The table mapping to use.
