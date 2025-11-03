@@ -170,6 +170,7 @@ export class Visitor {
             else console.log(`Unhandled node type: ${node.type}`, node);
         }
 
+        // Why is this needed?
         if (node == this.ast) {
             if (!this.select) this.select = `*`;
             if (!this.where) this.where = "1 = 1";
@@ -207,7 +208,11 @@ export class Visitor {
     }
 
     protected VisitQueryOptions(node: Lexer.Token, context: any) {
-        node.value.options.forEach((option) => this.Visit(option, context));
+        node.value.options.forEach((option) => {
+            // Create a fresh context for each option to prevent one option from affecting others
+            const optionContext = { ...context };
+            this.Visit(option, optionContext);
+        });
     }
 
     protected VisitInlineCount(node: Lexer.Token, context: any) {
