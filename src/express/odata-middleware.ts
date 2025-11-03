@@ -66,11 +66,11 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
      * Perform an operation access check.
      */
     if (tableConfig?.accessControl) {
-        if (!req.session?.profile) {
+        if (!req['session']?.profile) {
             throw { status: 403, message: "Forbidden" };
         }
 
-        const groups = req.session.profile.roles;
+        const groups = req['session'].profile.roles;
         const { read, patch, delete: del, post, write, all } = tableConfig.accessControl;
 
         if (all) {
@@ -141,12 +141,19 @@ export const ODataV4ToSurrealQL = (
     // Note: createQuery throws an error if there is leading or trailing whitespace on odata params
     // It also throws an error if there are query params that aren't known to the odata spec.
     // TODO: Strip unknown params instead of throwing an error?
-    let {
-        where, select, orderby, limit, skip, parameters
-    } = hasFilter ? createQuery(odataQuery, {
+    const rootNode = hasFilter ? createQuery(odataQuery, {
         type: SQLLang.SurrealDB
     }) : {  } as Visitor;
+    let {
+        where,
+        select,
+        orderby,
+        limit,
+        skip,
+        parameters,
+    } = rootNode;
 
+    select ??= '*';
     parameters ??= new Map();
 
     // Initiate a query to count the number of total records that match
@@ -156,9 +163,26 @@ export const ODataV4ToSurrealQL = (
         'GROUP ALL'
     ].filter(i => i).join(' ');
 
+    const doExpand = (node: Visitor, path = '') => {
+        for (let i = 0; i < node.includes.length; i++) {
+            const include = node.includes[i];
+            path = path + include.navigationProperty;
+
+            select += ', ' + include.navigationProperty + '.' + include.select;
+
+            include.parameters.forEach((value, key) => {
+                parameters.set(path + '.' + key, value);
+            });
+
+            doExpand(include, path + '.');
+        }
+    }
+    doExpand(rootNode);
+
+
     // Build a full query that we will throw at surreal
     const entriesQuery = [
-        `SELECT ${select || '*'} FROM type::table($table)`,
+        `SELECT ${select} FROM type::table($table)`,
         `${where ? `WHERE ${where}` : ''}`,
         (typeof orderby == "string" && orderby != '1') ? `ORDER BY ${orderby}` : '',
         typeof limit == "number" ? `LIMIT ${limit}` : '',
@@ -409,10 +433,11 @@ export const SurrealODataV4Middleware = (
         throw new Error("No connection resolver specified");
     }
 
-    const router = express.Router();
+    const router: express.Router & { config: ODataExpressConfig } = express.Router() as any;
+    router.config = config;
 
     router.use(route(async (req, res, next) => {
-        req.db = connection instanceof Surreal ? connection : await connection(req);
+        req['db'] = connection instanceof Surreal ? connection : await connection(req);
         next();
     }));
 
@@ -439,7 +464,7 @@ export const SurrealODataV4Middleware = (
      */
     router.use(route(async (req, res, next) => {
         if (req.method != "GET") return next();
-        const db = req.db as Surreal;
+        const db = req['db'] as Surreal;
 
         const { tableConfig, table, id } = checkObjectAccess(req, tables);
 
@@ -502,7 +527,7 @@ export const SurrealODataV4Middleware = (
      *
      */
     router.use(route(async (req, res, next) => {
-        const db = req.db as Surreal;
+        const db = req['db'] as Surreal;
 
         const result = await ODataCRUDMethods(db, config, req);
         res.send(Array.isArray(result) ? result.map(r => r.result) : result.result);
