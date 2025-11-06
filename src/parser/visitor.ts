@@ -361,9 +361,20 @@ export class Visitor {
 
     protected VisitODataIdentifier(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
-            const fieldSeed = `$field${this.fieldSeed++}`;
-            this.parameters.set(fieldSeed, node.value.name);
-            this[context.target] += `type::field(${fieldSeed})`;
+            // In Surreal 2.x, orderby does not support parameterization of field names.
+            if (context.target == 'orderby') {
+                // TODO: Handle navigation properties?
+                // For now, we will panic if there are any non basic ASCII chars.
+                if (/[^A-Za-z0-9_\-]/.test(node.value.name)) {
+                    throw new ODataV4ParseError({ msg: `Cannot use non-basic ASCII characters in ORDER BY clauses for SurrealDB. This is a safety limiter for the query language that is resolved in Surreal 3.x.` });
+                }
+                this[context.target] += node.value.name;
+            }
+            else {
+                const fieldSeed = `$field${this.fieldSeed++}`;
+                this.parameters.set(fieldSeed, node.value.name);
+                this[context.target] += `type::field(${fieldSeed})`;
+            }
         }
         else {
             this[context.target] += `[${node.value.name}]`;
@@ -593,7 +604,6 @@ export class Visitor {
                     this.Visit(params[0], context);
                     this.where += ")";
                 }
-                // Intentional fallthrough.
             case "year":
             case "month":
             case "day":
