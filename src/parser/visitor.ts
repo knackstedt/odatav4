@@ -582,7 +582,18 @@ export class Visitor {
                 this.where += ")";
                 break;
             case "floor":
+                if (this.type == SQLLang.SurrealDB) {
+                    this.where += `math::floor(`;
+                    this.Visit(params[0], context);
+                    this.where += ")";
+                }
             case "ceiling":
+                if (this.type == SQLLang.SurrealDB) {
+                    this.where += `math::ceil(`
+                    this.Visit(params[0], context);
+                    this.where += ")";
+                }
+                // Intentional fallthrough.
             case "year":
             case "month":
             case "day":
