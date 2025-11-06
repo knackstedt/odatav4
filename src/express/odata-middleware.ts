@@ -164,7 +164,7 @@ export const ODataV4ToSurrealQL = (
     ].filter(i => i).join(' ');
 
     const doExpand = (node: Visitor, path = '') => {
-        for (let i = 0; i < node.includes.length; i++) {
+        for (let i = 0; i < node.includes?.length; i++) {
             const include = node.includes[i];
             path = path + include.navigationProperty;
 
