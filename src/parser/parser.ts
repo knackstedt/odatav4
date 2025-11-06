@@ -10,7 +10,7 @@ export const parserFactory = function (
     fn: (value: Utils.SourceArray, index: number, metadataContext?: any) => Lexer.Token
 ) {
     return function (source: string, options) {
-        options = options || {};
+        options ||= {};
         const raw = new Uint16Array(source.length);
         let pos = 0;
         for (let i = 0; i < source.length; i++) {
@@ -55,14 +55,6 @@ export const parserFactory = function (
     };
 };
 
-export class Parser {
-    odataUri(source: string, options?: any): Lexer.Token { return parserFactory(ODataUri.odataUri)(source, options); }
-    resourcePath(source: string, options?: any): Lexer.Token { return parserFactory(ResourcePath.resourcePath)(source, options); }
-    query(source: string, options?: any): Lexer.Token { return parserFactory(Query.queryOptions)(source, options); }
-    filter(source: string, options?: any): Lexer.Token { return parserFactory(Expressions.boolCommonExpr)(source, options); }
-    keys(source: string, options?: any): Lexer.Token { return parserFactory(Expressions.keyPredicate)(source, options); }
-    literal(source: string, options?: any): Lexer.Token { return parserFactory(PrimitiveLiteral.primitiveLiteral)(source, options); }
-}
 
 export function odataUri(source: string, options?: any): Lexer.Token { return parserFactory(ODataUri.odataUri)(source, options); }
 export function resourcePath(source: string, options?: any): Lexer.Token { return parserFactory(ResourcePath.resourcePath)(source, options); }
@@ -70,3 +62,13 @@ export function query(source: string, options?: any): Lexer.Token { return parse
 export function filter(source: string, options?: any): Lexer.Token { return parserFactory(Expressions.boolCommonExpr)(source, options); }
 export function keys(source: string, options?: any): Lexer.Token { return parserFactory(Expressions.keyPredicate)(source, options); }
 export function literal(source: string, options?: any): Lexer.Token { return parserFactory(PrimitiveLiteral.primitiveLiteral)(source, options); }
+
+export class Parser {
+    odataUri = odataUri;
+    resourcePath = resourcePath;
+    query = query;
+    filter = filter;
+    keys = keys;
+    literal = literal;
+}
+
