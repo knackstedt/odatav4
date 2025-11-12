@@ -159,6 +159,17 @@ export type ODataExpressConfig = {
     variables?: Record<any, any> | ((req: express.Request, item: Record<any, any>) => Record<any, any> | Promise<Record<any, any>>);
 
     /**
+     * WARNING: Experimental feature, may change or be removed in future versions.
+     * Enable automatic type casting based on SurrealDB schema.
+     * When enabled, the middleware will attempt to cast query parameters and payload fields to the types defined in the SurrealDB schema.
+     * This helps ensure that data is stored and queried in the correct format, reducing type-related errors.
+     * Default is false.
+     *
+     * @experimental
+     */
+    enableAutoTypeCasting?: boolean;
+
+    /**
      * Global hooks that apply to all tables.
      */
     // hooks?: ODataExpressHooks,

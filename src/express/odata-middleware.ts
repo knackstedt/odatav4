@@ -6,6 +6,7 @@ import Surreal, { RecordId, StringRecordId } from 'surrealdb';
 import { createQuery, SQLLang } from '../parser/main';
 import { Visitor } from '../parser/visitor';
 import { ODataExpressConfig, ODataExpressTable } from '../types';
+import { getJSONSchema, getODataMetadata } from '../util/metadata';
 
 
 
@@ -417,17 +418,16 @@ const ODataCRUDMethods = async (
     }
 };
 
+
 export const SurrealODataV4Middleware = (
     config: ODataExpressConfig
 ) => {
-    const {
-        resolveDb: connection,
-        tables,
-        // idGenerator,
-        // defaultPageSize = 100,
-        // maxPageSize = 1000,
-        // hooks
-    } = config;
+    const connection = config.resolveDb;
+    const tables: (ODataExpressTable<any> & { _fields?: { type: string } })[] = config.tables;
+
+    if (config.enableAutoTypeCasting) {
+
+    }
 
     if (!connection) {
         throw new Error("No connection resolver specified");
@@ -442,25 +442,35 @@ export const SurrealODataV4Middleware = (
     }));
 
     /**
-     * Metadata endpoint must be first
-     * TODO: actually match odata spec
+     * OData Metadata Endpoint
      */
-    // router.get('/$metadata#:table', route(async (req, res, next) => {
-    //     const table = req['_table'] as string;
-    //     const db = req.db as Surreal;
+    router.get('/$metadata#:table', route(async (req, res, next) => {
+        const db = req['db'] as Surreal;
+        const { tableConfig, table, id } = checkObjectAccess(req, tables);
 
-    //     if (!table) {
-    //         throw { status: 400, message: "Table not specified" };
-    //     }
+        if (!tableConfig) {
+            throw { status: 400, message: "Table not specified" };
+        }
 
-    //     const schemaFields = Object.keys((
-    //         (await db.query(`INFO FOR TABLE ` + table))[0][0].result as any)?.fd
-    //     );
-    //     res.send(schemaFields);
-    // }));
+        res.send(await getODataMetadata(db, tableConfig));
+    }));
 
     /**
-     *
+     * JSON Schema Endpoint
+     */
+    router.get('/$schema#:table', route(async (req, res, next) => {
+        const db = req['db'] as Surreal;
+        const { tableConfig, table, id } = checkObjectAccess(req, tables);
+
+        if (!tableConfig) {
+            throw { status: 400, message: "Table not specified" };
+        }
+
+        res.send(await getJSONSchema(db, tableConfig));
+    }));
+
+    /**
+     * GET -- select with filtering
      */
     router.use(route(async (req, res, next) => {
         if (req.method != "GET") return next();

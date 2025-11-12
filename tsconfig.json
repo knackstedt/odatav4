@@ -15,7 +15,7 @@
     "types": ["bun", "jest"]
   },
   "exclude": [
-    "test/**/*.ts",
+    "src/test/**/*.ts",
     "dist/**/*.ts"
   ]
 }
