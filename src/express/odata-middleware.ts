@@ -190,18 +190,19 @@ export const ODataV4ToSurrealQL = (
         typeof limit == "number" ? `LIMIT ${limit}` : '',
         typeof limit == "number" ? `LIMIT ${limit}` : '',
         typeof skip == "number" ? `START ${skip}` : '',
-        typeof fetch == "string" ? `FETCH ${fetch}` : ''
     ].filter(i => i).join(' ');
 
     if (fetch) {
         if (!Array.isArray(fetch))
             fetch = [fetch];
 
-        entriesQuery += ` FETCH `;
-        entriesQuery += fetch.map((field, idx) => {
-            parameters[`fetch${idx}`] = field;
-            return `$fetch${idx}`;
-        }).join(', ');
+        if (fetch.length > 0) {
+            entriesQuery += ` FETCH `;
+            entriesQuery += fetch.map((field, idx) => {
+                parameters.set(`$fetch${idx}`, field);
+                return `$fetch${idx}`;
+            }).join(', ');
+        }
     }
 
     // Pass the table as a parameter to avoid injection attacks.
@@ -511,18 +512,21 @@ export const SurrealODataV4Middleware = (
             let query = `SELECT * FROM $id`;
             let params = {};
             let fetch = tableConfig.fetch;
+
             if (fetch) {
                 if (!Array.isArray(fetch))
                     fetch = [fetch];
 
-                query += ` FETCH `;
-                query += fetch.map((field, idx) => {
-                    params[`fetch${idx}`] = field;
-                    return `$fetch${idx}`
-                }).join(', ');
+                if (fetch.length > 0) {
+                    query += ` FETCH `;
+                    query += fetch.map((field, idx) => {
+                        params[`fetch${idx}`] = field;
+                        return `$fetch${idx}`;
+                    }).join(', ');
+                }
             }
-
             let _r = await db.query<[[any]]>(query, {
+                ...params,
                 id: new RecordId(table, id)
             });
             let [[result]] = _r;
