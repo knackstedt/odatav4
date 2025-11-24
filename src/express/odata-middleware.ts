@@ -1,4 +1,3 @@
-
 import * as express from "express";
 import { route } from './util';
 
@@ -120,6 +119,7 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
 export const ODataV4ToSurrealQL = (
     table: string,
     urlPath: string,
+    fetch = [] as string | string[]
 ) => {
     // If we don't get a full URL, fake one.
     if (!/https?:\/\//.test(urlPath)) {
@@ -134,10 +134,12 @@ export const ODataV4ToSurrealQL = (
         queryString?.includes("$group") ||
         queryString?.includes("$expand") ||
         queryString?.includes("$top") ||
+        queryString?.includes("$fetch") ||
         queryString?.includes("$order");
 
     const query = queryString.startsWith("?") ? queryString.slice(1) : queryString;
     const odataQuery = decodeURIComponent(query.trim());
+
 
     // Note: createQuery throws an error if there is leading or trailing whitespace on odata params
     // It also throws an error if there are query params that aren't known to the odata spec.
@@ -181,13 +183,26 @@ export const ODataV4ToSurrealQL = (
 
 
     // Build a full query that we will throw at surreal
-    const entriesQuery = [
+    let entriesQuery = [
         `SELECT ${select} FROM type::table($table)`,
         `${where ? `WHERE ${where}` : ''}`,
         (typeof orderby == "string" && orderby != '1') ? `ORDER BY ${orderby}` : '',
         typeof limit == "number" ? `LIMIT ${limit}` : '',
-        typeof skip == "number" ? `START ${skip}` : ''
+        typeof limit == "number" ? `LIMIT ${limit}` : '',
+        typeof skip == "number" ? `START ${skip}` : '',
+        typeof fetch == "string" ? `FETCH ${fetch}` : ''
     ].filter(i => i).join(' ');
+
+    if (fetch) {
+        if (!Array.isArray(fetch))
+            fetch = [fetch];
+
+        entriesQuery += ` FETCH `;
+        entriesQuery += fetch.map((field, idx) => {
+            parameters[`fetch${idx}`] = field;
+            return `$fetch${idx}`;
+        }).join(', ');
+    }
 
     // Pass the table as a parameter to avoid injection attacks.
     parameters.set("$table", table);
@@ -211,7 +226,8 @@ export const ODataV4ToSurrealQL = (
 export const RunODataV4SelectFilter = async (
     db: Surreal,
     table: string,
-    urlPath: string
+    urlPath: string,
+    fetch = [] as string | string[]
 ) => {
 
     let {
@@ -222,7 +238,8 @@ export const RunODataV4SelectFilter = async (
         limit
     } = await ODataV4ToSurrealQL(
         table,
-        urlPath
+        urlPath,
+        fetch
     );
     limit ??= 0;
     skip ??= 0;
@@ -491,7 +508,21 @@ export const SurrealODataV4Middleware = (
 
         // If the target includes a colon, then we're acting on 1 record
         if (id) {
-            let _r = await db.query<[[any]]>(`SELECT * FROM $id`, {
+            let query = `SELECT * FROM $id`;
+            let params = {};
+            let fetch = tableConfig.fetch;
+            if (fetch) {
+                if (!Array.isArray(fetch))
+                    fetch = [fetch];
+
+                query += ` FETCH `;
+                query += fetch.map((field, idx) => {
+                    params[`fetch${idx}`] = field;
+                    return `$fetch${idx}`
+                }).join(', ');
+            }
+
+            let _r = await db.query<[[any]]>(query, {
                 id: new RecordId(table, id)
             });
             let [[result]] = _r;
@@ -525,11 +556,22 @@ export const SurrealODataV4Middleware = (
         const result = await RunODataV4SelectFilter(
             db,
             table,
-            url.toString()
+            url.toString(),
+            tableConfig.fetch
         );
 
         if (typeof tableConfig.afterRecordGet == "function") {
-            result.value = await Promise.all(result.value.map(v => tableConfig.afterRecordGet(req, v)));
+            // result.value = await Promise.all(result.value.map(v => tableConfig.afterRecordGet(req, v)));
+            const batchSize = 10;
+            const processedValues = [];
+
+            for (let i = 0; i < result.value.length; i += batchSize) {
+                const batch = result.value.slice(i, i + batchSize);
+                const processedBatch = await Promise.all(batch.map(v => tableConfig.afterRecordGet(req, v)));
+                processedValues.push(...processedBatch);
+            }
+
+            result.value = processedValues;
         }
 
         res.set("Content-Type", "application/json");

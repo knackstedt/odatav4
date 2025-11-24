@@ -25,6 +25,13 @@ class ODataExpressTableConfig<T = unknown> {
     uriSegment?: string;
 
     /**
+     * Optional fetch expression to use for all GET queries on this table.
+     * This is equivalent to adding $fetch={fetch} to every query.
+     * Example: "author, comments->(author)"
+     */
+    fetch?: string | string[];
+
+    /**
      * Access control configuration for the table.
      * The roles are read from `req.session.profile.roles` which is an array of strings.
      *
