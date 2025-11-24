@@ -154,7 +154,6 @@ export const ODataV4ToSurrealQL = (
         parameters,
     } = rootNode;
 
-    select ??= '*';
     parameters ??= new Map();
 
     // Initiate a query to count the number of total records that match
@@ -202,11 +201,19 @@ export const ODataV4ToSurrealQL = (
     };
 };
 
+/**
+ * Executes an OData V4 select query with filtering against a SurrealDB table.
+ * @param db - The SurrealDB database instance.
+ * @param table - The name of the table to query.
+ * @param urlPath - The request URL containing OData query parameters.
+ * @returns A Promise resolving to an object containing OData-compliant results, including count, nextlink, and value array.
+ */
 export const RunODataV4SelectFilter = async (
     db: Surreal,
     table: string,
     urlPath: string
 ) => {
+
     let {
         countQuery,
         entriesQuery,
@@ -241,7 +248,7 @@ export const RunODataV4SelectFilter = async (
     const pageSize = 100;
 
     const url = new URL(urlPath);
-    url.searchParams.set('$skip', skip + data.length as any);
+    url.searchParams.set('$skip', skip + data.length);
     url.searchParams.set('$top', pageSize as any);
 
     // TODO: Implement metadata
@@ -250,12 +257,12 @@ export const RunODataV4SelectFilter = async (
     //     ? undefined
     //     : await db.query(`INFO FOR TABLE ${table}`);
 
-    const entriesRead = limit + skip;
+    const entriesRead = skip + data.length;
     return {
         // '@odata.metadata': metadata,
         // '@odata.context': `${url.pathname}$metadata#${table}`,
-        '@odata.count': count ?? data.length ?? 0,
-        '@odata.nextlink': (entriesRead) > (count as number)
+        '@odata.count': count ?? undefined,
+        '@odata.nextlink': (skip + pageSize) >= (count as number)
             ? undefined
             : `${url.pathname}?${url.searchParams.toString()}`,
         value: data
@@ -335,21 +342,21 @@ const ODataCRUDMethods = async (
 
         let result;
         if (req.method == "POST") {
-            const id = new RecordId(table, await idGenerator(item));
+            const newId = new RecordId(table, await idGenerator(item));
             delete item.id;
             const results = await db.query(`CREATE type::record($id) CONTENT $content`, {
-                id,
+                id: newId,
                 content: item,
                 ...variables
             });
-            result = results.pop()[0];
+            const popped = results.pop();
+            result = Array.isArray(popped) && popped.length > 0 ? popped[0] : null;
         }
         else if (req.method == "PATCH") {
             // if (!item.id) {
             //     throw { status: 400, message: "ID is required in body for PATCH" };
             // }
 
-            item.id = new StringRecordId(item.id) as any;
             delete item.id;
             result = await db.merge(rid, item);
             const results = await db.query(`UPDATE type::record($id) MERGE $content`, {
@@ -369,7 +376,6 @@ const ODataCRUDMethods = async (
             result = results.pop()[0];
         }
         else if (req.method == "DELETE") {
-            result = await db.delete(rid);
             const results = await db.query(`DELETE type::record($id)`, {
                 id: rid,
                 ...variables
@@ -387,7 +393,7 @@ const ODataCRUDMethods = async (
     }));
 
     // If there is a postprocessor, apply it on the result set.
-    results = await Promise.all(results.map(r => {
+    results = await Promise.all(results.map(async r => {
         const {
             result,
             accessResult
@@ -395,19 +401,19 @@ const ODataCRUDMethods = async (
 
         if (req.method != "GET") {
             if (typeof accessResult.tableConfig.afterRecordMutate == "function") {
-                accessResult.tableConfig.afterRecordMutate(req, result);
+                await accessResult.tableConfig.afterRecordMutate(req, result);
             }
         }
-
         if (typeof accessResult.tableConfig[afterMethod] == "function") {
-            accessResult.tableConfig[afterMethod](req, result);
+            await accessResult.tableConfig[afterMethod](req, result);
         }
+
         return r;
     }));
 
 
     if (isBulk) {
-        results = results.filter(r => r !== undefined);
+        results = results.filter(r => !!r);
         if (results.length == 0) {
             // TODO: Should we do anything special here?
         }
@@ -418,7 +424,12 @@ const ODataCRUDMethods = async (
     }
 };
 
-
+/**
+ * OData V4 Middleware for Express
+ * Based on the provided configuration, creates an Express router that
+ * handles OData V4 requests, translates them into SurrealDB queries,
+ * and returns the results in OData-compliant format.
+ */
 export const SurrealODataV4Middleware = (
     config: ODataExpressConfig
 ) => {
@@ -426,7 +437,7 @@ export const SurrealODataV4Middleware = (
     const tables: (ODataExpressTable<any> & { _fields?: { type: string } })[] = config.tables;
 
     if (config.enableAutoTypeCasting) {
-
+        // Experimental. TBD.
     }
 
     if (!connection) {
@@ -518,10 +529,7 @@ export const SurrealODataV4Middleware = (
         );
 
         if (typeof tableConfig.afterRecordGet == "function") {
-            for (let i = 0; i < result.value.length; i++) {
-                const item = result.value[i];
-                result.value[i] = await tableConfig.afterRecordGet(req, item);
-            }
+            result.value = await Promise.all(result.value.map(v => tableConfig.afterRecordGet(req, v)));
         }
 
         res.set("Content-Type", "application/json");
