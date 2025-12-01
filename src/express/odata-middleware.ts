@@ -188,7 +188,6 @@ export const ODataV4ToSurrealQL = (
         `${where ? `WHERE ${where}` : ''}`,
         (typeof orderby == "string" && orderby != '1') ? `ORDER BY ${orderby}` : '',
         typeof limit == "number" ? `LIMIT ${limit}` : '',
-        typeof limit == "number" ? `LIMIT ${limit}` : '',
         typeof skip == "number" ? `START ${skip}` : '',
     ].filter(i => i).join(' ');
 
