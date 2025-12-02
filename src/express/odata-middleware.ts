@@ -156,6 +156,8 @@ export const ODataV4ToSurrealQL = (
         parameters,
     } = rootNode;
 
+    // There are some cases where select may be undefined.
+    select ??= "*";
     parameters ??= new Map();
 
     // Initiate a query to count the number of total records that match
