@@ -301,6 +301,10 @@ export namespace Lexer {
         if (value[index] === 0x27) return index + 1;
         else if (Utils.equals(value, index, "%27")) return index + 3;
     }
+    export function BACKTICK(value: Utils.SourceArray, index: number): number {
+        if (value[index] === 0x60) return index + 1;
+        else if (Utils.equals(value, index, "%60")) return index + 3;
+    }
     export function OPEN(value: Utils.SourceArray, index: number): number {
         if (value[index] === 0x28) return index + 1;
         else if (Utils.equals(value, index, "%28")) return index + 3;

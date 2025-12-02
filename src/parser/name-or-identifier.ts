@@ -1,4 +1,4 @@
-import Utils from "./utils";
+import Utils, { ODataV4ParseError } from "./utils";
 import Lexer from "./lexer";
 import PrimitiveLiteral from "./primitive-literal";
 
@@ -148,8 +148,34 @@ export namespace NameOrIdentifier {
         return index - 1;
     }
     export function odataIdentifier(value: Utils.SourceArray, index: number, tokenType?: Lexer.TokenType): Lexer.Token {
-        let start = index;
-        if (Lexer.identifierLeadingCharacter(value[index])) {
+        const start = index;
+
+        // Check for backtick-delimited identifier
+        let backtick = Lexer.BACKTICK(value, index);
+        if (backtick > index) {
+            index = backtick;
+            let contentStart = index; // Save start of content
+
+            // Find closing backtick, allowing any characters except backtick
+            /// Lexer.BACKTICK(value, index)
+            while (index < value.length && value[index] !== 0x60 && !Utils.equals(value, index, "%60")) {
+                index++;
+            }
+
+            if (index === contentStart)
+                throw new ODataV4ParseError({ msg: "FormatError: Empty identifier"});
+
+            let closingBacktick = Lexer.BACKTICK(value, index);
+            if (!closingBacktick)
+                throw new ODataV4ParseError({ msg: "FormatError: Missing closing backtick" });
+
+            index = closingBacktick;
+
+            return Lexer.tokenize(value, start, index, { name: Utils.stringify(value, start+1, index-1) }, tokenType || Lexer.TokenType.ODataIdentifier);
+        }
+
+        // Original identifier logic
+        else if (Lexer.identifierLeadingCharacter(value[index])) {
             index++;
             while (index < value.length && (index - start < 128) && Lexer.identifierCharacter(value[index])) {
                 index++;
@@ -158,7 +184,9 @@ export namespace NameOrIdentifier {
 
         if (index > start) return Lexer.tokenize(value, start, index, { name: Utils.stringify(value, start, index) }, tokenType || Lexer.TokenType.ODataIdentifier);
     }
-    export function namespacePart(value: Utils.SourceArray, index: number): Lexer.Token { return NameOrIdentifier.odataIdentifier(value, index, Lexer.TokenType.NamespacePart); }
+    export function namespacePart(value: Utils.SourceArray, index: number): Lexer.Token {
+        return NameOrIdentifier.odataIdentifier(value, index, Lexer.TokenType.NamespacePart);
+    }
     export function entitySetName(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
         let token = NameOrIdentifier.odataIdentifier(value, index, Lexer.TokenType.EntitySetName);
         if (!token) return;

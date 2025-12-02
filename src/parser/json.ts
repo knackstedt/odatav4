@@ -195,8 +195,8 @@ export namespace ArrayOrObject {
         let namespaceStart = index;
         index = namespaceNext;
 
-        if (value[index] !== 0x2e) return;
-        index++;
+        if (value[index] !== 0x2e && !Utils.equals(value, index, "%2E")) return;
+        index += value[index] === 0x2e ? 1 : 3;
 
         let term = NameOrIdentifier.termName(value, index);
         if (!term) return;

@@ -145,37 +145,34 @@ export namespace PrimitiveLiteral {
     export function stringValue(value: Utils.SourceArray, index: number): Lexer.Token {
         let start = index;
         let squote = Lexer.SQUOTE(value, start);
-        if (squote) {
-            index = squote;
-            while (index < value.length) {
-                squote = Lexer.SQUOTE(value, index);
-                if (squote) {
+        if (!squote) return;
+
+        index = squote;
+
+        // Read characters until we find an unescaped closing quote
+        while (index < value.length) {
+            squote = Lexer.SQUOTE(value, index);
+
+            if (squote) {
+                // Found a single quote - check if it's escaped (doubled)
+                let nextSquote = Lexer.SQUOTE(value, squote);
+                if (nextSquote) {
+                    // This is an escaped quote (''), continue reading
+                    index = nextSquote;
+                } else {
+                    // This is the closing quote
                     index = squote;
-                    squote = Lexer.SQUOTE(value, index);
-                    if (!squote) {
-                        let close = Lexer.CLOSE(value, index);
-                        let comma = Lexer.COMMA(value, index);
-                        let amp = value[index] === 0x26;
-                        if (Lexer.pcharNoSQUOTE(value, index) > index && !amp && !close && !comma && Lexer.SKIPWHITESPACE(value, index) === index) return;
-                        break;
-                    }
-                    else {
-                        index = squote;
-                    }
+                    return Lexer.tokenize(value, start, index, "Edm.String", Lexer.TokenType.Literal);
                 }
-                else {
-                    let nextIndex = Math.max(Lexer.SKIPWHITESPACE(value, index), Lexer.pcharNoSQUOTE(value, index));
-                    if (nextIndex === index) return;
-                    index = nextIndex;
-                }
+            } else {
+                // Not a quote, advance by one character
+                // Allow any character except unescaped single quote
+                index++;
             }
-
-            squote = Lexer.SQUOTE(value, index - 1) || Lexer.SQUOTE(value, index - 3);
-            if (!squote) return;
-            index = squote;
-
-            return Lexer.tokenize(value, start, index, "Edm.String", Lexer.TokenType.Literal);
         }
+
+        // Reached end of input without finding closing quote
+        return;
     }
     export function durationValue(value: Utils.SourceArray, index: number): Lexer.Token {
         if (!Utils.equals(value, index, "duration")) return;
