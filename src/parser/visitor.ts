@@ -384,6 +384,8 @@ export class Visitor {
 
     protected VisitEqualsExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
+            // TODO: This exists to handle surrealDB strings as IDs
+            // but it probably needs reworked from the ground-up.
             if (
                 node.value.right.type == Lexer.TokenType.Literal &&
                 node.value.right.value == "Edm.String" &&
@@ -397,9 +399,24 @@ export class Visitor {
                 this.where += " = ";
                 this.Visit(node.value.right, context);
                 this.where += ") || (";
+                const where = this.where;
+                const p = this.where.length;
+
+                this.where = '';
                 this.Visit(node.value.left, context);
-                this.where += " = type::record(";
+                this.where += "```";
                 this.Visit(node.value.right, context);
+
+                const [ field, literal ] = this.where.split("```");
+
+                this.where = where;
+
+                this.where += "string::is::record(";
+                this.where += literal;
+                this.where += ") AND ";
+                this.where += field;
+                this.where += " = type::record(";
+                this.where += literal;
                 this.where += "))";
             }
             else {
