@@ -167,7 +167,9 @@ export class Visitor {
         if (node) {
             var visitor = this[`Visit${node.type}`];
             if (visitor) visitor.call(this, node, context);
-            else console.log(`Unhandled node type: ${node.type}`, node);
+            else {
+                throw new ODataV4ParseError({ msg: `Unhandled node type: ${node.type}`, node });
+            }
         }
 
         // Why is this needed?
@@ -267,25 +269,44 @@ export class Visitor {
     }
 
     protected VisitAndExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
         if (this.type == SQLLang.SurrealDB) {
+            this.where += "(";
+            this.Visit(node.value.left, context);
             this.where += " && ";
+            this.Visit(node.value.right, context);
+            this.where += ")";
         }
         else {
+            this.Visit(node.value.left, context);
             this.where += " AND ";
+            this.Visit(node.value.right, context);
         }
-        this.Visit(node.value.right, context);
     }
 
     protected VisitOrExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
         if (this.type == SQLLang.SurrealDB) {
+            this.where += "(";
+            this.Visit(node.value.left, context);
             this.where += " || ";
+            this.Visit(node.value.right, context);
+            this.where += ")";
         }
         else {
+            this.Visit(node.value.left, context);
             this.where += " OR ";
+            this.Visit(node.value.right, context);
         }
-        this.Visit(node.value.right, context);
+    }
+
+    protected VisitNotExpression(node: Lexer.Token, context: any) {
+        if (this.type == SQLLang.SurrealDB) {
+            this.where += "!("
+            this.Visit(node.value, context);
+            this.where += ")";
+        }
+        else {
+            this.Visit(node.value.right, context);
+        }
     }
 
     protected VisitInExpression(node: Lexer.Token, context: any) {
@@ -386,6 +407,7 @@ export class Visitor {
         if (this.type == SQLLang.SurrealDB) {
             // TODO: This exists to handle surrealDB strings as IDs
             // but it probably needs reworked from the ground-up.
+            // TODO: This doesn't work for the string on the left side!
             if (
                 node.value.right.type == Lexer.TokenType.Literal &&
                 node.value.right.value == "Edm.String" &&
@@ -394,7 +416,7 @@ export class Visitor {
                 // We will optionally handle SurrealDB IDs here.
                 // This emits an equals expression that checks both the string value and the record type.
                 // e.g. (field = 'scan:01K7HT1EMX3EYE19M1MGQ36D7K' || field = type::record('scan:01K7HT1EMX3EYE19M1MGQ36D7K'))
-                this.where += "(";
+                this.where += "((";
                 this.Visit(node.value.left, context);
                 this.where += " = ";
                 this.Visit(node.value.right, context);
@@ -417,7 +439,7 @@ export class Visitor {
                 this.where += field;
                 this.where += " = type::record(";
                 this.where += literal;
-                this.where += "))";
+                this.where += ")))";
             }
             else {
                 // this isn't possibly a SurrealDB ID, so do normal equals handling.
