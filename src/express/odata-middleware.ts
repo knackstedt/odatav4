@@ -1,7 +1,7 @@
 import * as express from "express";
 import { route } from './util';
 
-import Surreal, { RecordId, StringRecordId } from 'surrealdb';
+import Surreal, { RecordId } from 'surrealdb';
 import { createQuery, SQLLang } from '../parser/main';
 import { Visitor } from '../parser/visitor';
 import { ODataExpressConfig, ODataExpressTable } from '../types';
@@ -70,7 +70,8 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
             throw { status: 403, message: "Forbidden" };
         }
 
-        const groups = req['session'].profile.roles;
+        const method = req.method.toLowerCase();
+        const groups = req['session'].profile.roles ?? [];
         const { read, patch, delete: del, post, write, all } = tableConfig.accessControl;
 
         if (all) {
@@ -78,28 +79,28 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
                 throw { status: 403, message: "Forbidden" };
         }
 
-        if (read && req.method == 'get') {
+        if (read && method === 'get') {
             if (!read.find(r => groups.includes(r)))
                 throw { status: 403, message: "Forbidden" };
         }
 
-        if (patch && req.method == 'patch') {
+        if (patch && method === 'patch') {
             if (!patch.find(r => groups.includes(r)))
                 throw { status: 403, message: "Forbidden" };
         }
 
-        if (del && req.method == 'delete') {
+        if (del && method === 'delete') {
             if (!del.find(r => groups.includes(r)))
                 throw { status: 403, message: "Forbidden" };
         }
 
-        if (post && req.method == 'post') {
+        if (post && method === 'post') {
             if (!post.find(r => groups.includes(r)))
                 throw { status: 403, message: "Forbidden" };
         }
 
         // If it's something that would modify a table, check for write access.
-        if (write && ['post', 'patch', 'delete'].includes(req.method)) {
+        if (write && ['post', 'patch', 'delete'].includes(method)) {
             if (!write.find(r => groups.includes(r)))
                 throw { status: 403, message: "Forbidden" };
         }
