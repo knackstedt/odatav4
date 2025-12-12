@@ -1,7 +1,7 @@
 import * as express from "express";
 import { route } from './util';
 
-import Surreal, { RecordId } from 'surrealdb';
+import { RecordId, Surreal } from 'surrealdb';
 import { createQuery, SQLLang } from '../parser/main';
 import { Visitor } from '../parser/visitor';
 import { ODataExpressConfig, ODataExpressTable } from '../types';
@@ -259,8 +259,8 @@ export const RunODataV4SelectFilter = async (
         countResult,
         [data]
     ] = await Promise.all([
-        db.query<any>(countQuery, parameters),
-        db.query<any[]>(entriesQuery, parameters)
+        db.query(countQuery, parameters).collect<any>(),
+        db.query(entriesQuery, parameters).collect<any[]>()
     ]);
     data ??= [];
     const count = countResult?.[0]?.[0]?.count || 0;
@@ -356,7 +356,8 @@ const ODataCRUDMethods = async (
         ) || [];
 
         idGenerator ??= async () => {
-            return db.query<[string]>('RETURN rand::ulid().lowercase()')
+            return db.query('RETURN rand::ulid().lowercase()')
+                .collect<[string]>()
                 .then(r => r[0]);
         }
 
@@ -368,7 +369,7 @@ const ODataCRUDMethods = async (
                 id: newId,
                 content: item,
                 ...variables
-            });
+            }).collect();
             const popped = results.pop();
             result = Array.isArray(popped) && popped.length > 0 ? popped[0] : null;
         }
@@ -378,12 +379,11 @@ const ODataCRUDMethods = async (
             // }
 
             delete item.id;
-            result = await db.merge(rid, item);
             const results = await db.query(`UPDATE type::record($id) MERGE $content`, {
                 id: rid,
                 content: item,
                 ...variables
-            });
+            }).collect();
             result = results.pop()[0];
         }
         else if (req.method == "PUT") {
@@ -392,14 +392,14 @@ const ODataCRUDMethods = async (
                 id: rid,
                 content: item,
                 ...variables
-            });
+            }).collect();
             result = results.pop()[0];
         }
         else if (req.method == "DELETE") {
             const results = await db.query(`DELETE type::record($id)`, {
                 id: rid,
                 ...variables
-            });
+            }).collect();
             result = results.pop()[0];
         }
         else {
@@ -527,10 +527,10 @@ export const SurrealODataV4Middleware = (
                     }).join(', ');
                 }
             }
-            let _r = await db.query<[[any]]>(query, {
+            let _r = await db.query(query, {
                 ...params,
                 id: new RecordId(table, id)
-            });
+            }).collect<[[any]]>();
             let [[result]] = _r;
 
             if (typeof tableConfig.afterRecordGet == "function")
