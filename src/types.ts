@@ -1,5 +1,5 @@
 import * as express from 'express';
-import Surreal from 'surrealdb';
+import type { Surreal } from 'surrealdb';
 
 export type ODataExpressHooks<T = Record<any, any>> = {
     selectQuery: (sql: string) => Promise<T[]>,
@@ -18,6 +18,7 @@ class ODataExpressTableConfig<T = unknown> {
      * The table that this configuration applies to.
      */
     table: string;
+
     /**
      * Optional URI segment to use instead of the table name.
      * By default it will use the table name as the URI segment.
@@ -26,21 +27,20 @@ class ODataExpressTableConfig<T = unknown> {
 
     /**
      * Optional fetch expression to use for all GET queries on this table.
-     * This is equivalent to adding $fetch={fetch} to every query.
-     * Example: "author, comments->(author)"
+     * Example: "SELECT * FROM test FETCH author, comments"
      */
     fetch?: string | string[];
 
     /**
      * Access control configuration for the table.
-     * The roles are read from `req.session.profile.roles` which is an array of strings.
+     * The roles are read from `req.session.profile.roles` which should be an array of strings.
      *
      * If a user has at least one of the roles listed for the action, they are allowed to perform that action.
-     * If no roles are specified for an action, it is assumed that the action is allowed for all users.
      * If an empty array is specified, the action is denied for all users.
+     * If the value is set to null or undefined, the action will be allowed for all users.
      *
      * The `write` role encompasses `post`, `patch` and `delete` together.
-     * The `all` role ensures that the user has at least one of the listed roles, for ANY of the methods.
+     * The `all` role ensures that the user has at least one of the listed roles, for any method.
      */
     accessControl?: {
         read?: string[],
@@ -142,14 +142,14 @@ export class ODataExpressTable<T> extends ODataExpressTableConfig<T> {
 
 export type ODataExpressConfig = {
     /**
-     *
+     * Function to resolve the SurrealDB instance to use for each request.
      * @param recordId
      * @returns
      */
     resolveDb: (req: express.Request) => Surreal | Promise<Surreal>,
 
     /**
-     * The table mapping to use.
+     * The tables to create endpoints for.
      */
     tables: ODataExpressTable<any>[]
 

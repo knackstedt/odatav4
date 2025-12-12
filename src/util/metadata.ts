@@ -1,4 +1,4 @@
-import Surreal from 'surrealdb';
+import { Surreal } from 'surrealdb';
 import { ODataExpressTable } from '../types';
 
 // Create function to get the odatav4 metadata for a table
@@ -43,7 +43,7 @@ interface ODataMetadata {
  * @returns OData Metadata object
  */
 export const getODataMetadata = async (db: Surreal, table: ODataExpressTable<any>) => {
-    const [{ fields }] = await db.query<[{ fields: { [key: string]: string; }; }]>(`INFO FOR TABLE \`${table.table.replace(/`/g, '\\`')}\``);
+    const [{ fields }] = await db.query(`INFO FOR TABLE \`${table.table.replace(/`/g, '\\`')}\``).collect<[{ fields: { [key: string]: string; }; }]>();
 
     const entityTypeName = `core.${table.table}`;
     const entityType: ODataEntityType = {
@@ -205,7 +205,7 @@ interface JSONSchema {
  * @returns JSON Schema object
  */
 export const getJSONSchema = async (db: Surreal, table: ODataExpressTable<any>): Promise<JSONSchema> => {
-    const [{ fields }] = await db.query<[{ fields: {[key: string]: string} }]>(`INFO FOR TABLE \`${table.table.replace(/`/g, '\\`')}\``);
+    const [{ fields }] = await db.query(`INFO FOR TABLE \`${table.table.replace(/`/g, '\\`')}\``).collect<[{ fields: { [key: string]: string; }; }]>();
 
     const properties: Record<string, JSONSchemaProperty> = {};
     const required: string[] = [];

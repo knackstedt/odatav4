@@ -1,6 +1,6 @@
+import Lexer from './lexer';
 import { Literal } from "./literal";
 import { SqlOptions } from "./main";
-import Lexer from './lexer';
 import { ODataV4ParseError } from './utils';
 
 export class SQLLiteral extends Literal {
@@ -433,7 +433,7 @@ export class Visitor {
 
                 this.where = where;
 
-                this.where += "string::is::record(";
+                this.where += "string::is_record(";
                 this.where += literal;
                 this.where += ") AND ";
                 this.where += field;
