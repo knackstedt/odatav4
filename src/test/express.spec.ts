@@ -1,14 +1,14 @@
-import Surreal from 'surrealdb';
+import axios from 'axios';
+import express from 'express';
+import { Surreal } from 'surrealdb';
 import { SurrealODataV4Middleware } from '../express/odata-middleware';
 import { ODataExpressTable } from '../types';
-import express from 'express';
-import axios from 'axios';
 
 
 export const TenantODataV4Controller = SurrealODataV4Middleware({
     resolveDb: async (req) => {
         const db = new Surreal();
-        await db.connect('http://localhost:8000', { auth: { username: 'root', password: 'root' } });
+        await db.connect('ws://localhost:8000', { authentication: { username: 'root', password: 'root' } });
         await db.use({ namespace: 'test', database: 'test' });
         return db;
     },

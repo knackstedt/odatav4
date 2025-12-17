@@ -36,12 +36,43 @@ describe('Basic comparisons', () => {
         expect(result).toContain('type::field($field1) <= $literal1');
     });
 
+    test('complex less than or equal operator', () => {
+        const result = processFilter('$filter=(value add 123) le 456');
+        expect(result).toContain('type::field($field1) <= $literal1');
+    });
+
     test('string comparison', () => {
         const result = processFilter("$filter=name eq 'John'");
         expect(result).toContain("type::field($field1) = $literal1");
     });
 });
 
+describe('Mathematical modifiers', () => {
+    test('add operator', () => {
+        const result = processFilter('$filter=(notes add users) gt 456');
+        expect(result).toContain('(type::field($field1) + type::field($field2)) > $literal1');
+    });
+
+    test('sub operator', () => {
+        const result = processFilter('$filter=(notes sub users) gt 456');
+        expect(result).toContain('(type::field($field1) - type::field($field2)) > $literal1');
+    });
+
+    test('mul operator', () => {
+        const result = processFilter('$filter=(notes mul users) gt 456');
+        expect(result).toContain('(type::field($field1) * type::field($field2)) > $literal1');
+    });
+
+    test('div operator', () => {
+        const result = processFilter('$filter=(notes div users) gt 456');
+        expect(result).toContain('(type::field($field1) / type::field($field2)) > $literal1');
+    });
+
+    test('mod operator', () => {
+        const result = processFilter('$filter=(notes mod users) lt 456');
+        expect(result).toContain('(type::field($field1) % type::field($field2)) < $literal1');
+    });
+});
 
 // Logical operators
 describe('Logical operators', () => {
