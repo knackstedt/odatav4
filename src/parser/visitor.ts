@@ -67,6 +67,19 @@ export class Visitor {
         }
     }
 
+    protected getFetchPaths(includes: Visitor[], parentPath: string = ""): string[] {
+        const paths: string[] = [];
+        for (const include of includes) {
+            if (!include.navigationProperty) continue;
+            const currentPath = parentPath ? `${parentPath}.${include.navigationProperty}` : include.navigationProperty;
+            paths.push(currentPath);
+            if (include.includes.length > 0) {
+                paths.push(...this.getFetchPaths(include.includes, currentPath));
+            }
+        }
+        return paths;
+    }
+
     getBaseQuery(table: string) {
         switch (this.options.type) {
             case SQLLang.SurrealDB: {
@@ -108,6 +121,10 @@ export class Visitor {
             case SQLLang.SurrealDB:
                 if (typeof this.limit == "number") sql += ` LIMIT ${this.limit}`;
                 if (typeof this.skip == "number") sql += ` START ${this.skip}`;
+                if (this.includes.length > 0) {
+                    const paths = this.getFetchPaths(this.includes);
+                    if (paths.length > 0) sql += ` FETCH ${paths.join(", ")}`;
+                }
                 break;
             case SQLLang.MySql:
             case SQLLang.PostgreSql:
