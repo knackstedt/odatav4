@@ -38,7 +38,7 @@ describe('Basic comparisons', () => {
 
     test('complex less than or equal operator', () => {
         const result = processFilter('$filter=(value add 123) le 456');
-        expect(result).toContain('type::field($field1) <= $literal1');
+        expect(result).toContain('(type::field($field1) + $literal1) <= $literal2');
     });
 
     test('string comparison', () => {
@@ -94,7 +94,7 @@ describe('Logical operators', () => {
 
     test('complex condition', () => {
         const result = processFilter("$filter=(age lt 12 or age gt 65) and active eq true");
-        expect(result).toContain("(type::field($field1) < $literal1 || type::field($field2) > $literal2) && type::field($field3) = $literal3");
+        expect(result).toContain("(((type::field($field1) < $literal1 || type::field($field2) > $literal2)) && type::field($field3) = $literal3)");
     });
 });
 
@@ -117,43 +117,44 @@ describe('String functions', () => {
 });
 
 
-// // Math operations
-// describe('Math operations', () => {
-//     test('add operation', () => {
-//         const result = processFilter("$filter=price add 10 gt 100");
-//         expect(result).toContain("price + 10 > 100");
-//     });
+// Math operations
+describe('Math operations', () => {
+    test('add operation', () => {
+        const result = processFilter("$filter=price add 10 gt 100");
+        expect(result).toContain("type::field($field1) + $literal1 > $literal2");
+    });
 
-//     test('sub operation', () => {
-//         const result = processFilter("$filter=price sub 10 lt 50");
-//         expect(result).toContain("price - 10 < 50");
-//     });
+    test('sub operation', () => {
+        const result = processFilter("$filter=price sub 10 lt 50");
+        expect(result).toContain("type::field($field1) - $literal1 < $literal2");
+    });
 
-//     test('mul operation', () => {
-//         const result = processFilter("$filter=price mul 1.1 gt price");
-//         expect(result).toContain("price * 1.1 > price");
-//     });
+    test('mul operation', () => {
+        const result = processFilter("$filter=price mul 1.1 gt price");
+        expect(result).toContain("type::field($field1) * $literal1 > type::field($field2)");
+    });
 
-//     test('div operation', () => {
-//         const result = processFilter("$filter=price div 2 le 50");
-//         expect(result).toContain("price / 2 <= 50");
-//     });
-// });
+    test('div operation', () => {
+        const result = processFilter("$filter=price div 2 le 50");
+        expect(result).toContain("type::field($field1) / $literal1 <= $literal2");
+    });
+});
 
-// // Complex expressions
-// describe('Complex expressions', () => {
-//     test('nested conditions with multiple operators', () => {
-//         const query = "$filter=(age gt 20 and age lt 30) or (status eq 'premium' and subscribed eq true)";
-//         const result = processFilter(query);
-//         expect(result).toContain("(age > 20 AND age < 30) OR (status = 'premium' AND subscribed = true)");
-//     });
 
-//     test('combined string and numeric operations', () => {
-//         const query = "$filter=startswith(name, 'J') and (age add 10) gt 30";
-//         const result = processFilter(query);
-//         expect(result).toContain("name STARTS WITH 'J' AND (age + 10) > 30");
-//     });
-// });
+// Complex expressions
+describe('Complex expressions', () => {
+    test('nested conditions with multiple operators', () => {
+        const query = "$filter=(age gt 20 and age lt 30) or (status eq 'premium' and subscribed eq true)";
+        const result = processFilter(query);
+        expect(result).toContain("(((type::field($field1) > $literal1 && type::field($field2) < $literal2)) || ((type::field($field3) = $literal3 && type::field($field4) = $literal4)))");
+    });
+
+    test('combined string and numeric operations', () => {
+        const query = "$filter=startswith(name, 'J') and (age add 10) gt 30";
+        const result = processFilter(query);
+        expect(result).toContain("(string::starts_with(type::field($field1), type::string($param1)) && (type::field($field2) + $literal2) > $literal3)");
+    });
+});
 
 // // $expand support
 // describe('expand support', () => {

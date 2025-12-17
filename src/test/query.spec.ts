@@ -18,8 +18,8 @@ describe('Query string processing', () => {
         expect(result.skip).toEqual(10);
     });
     test('skiptoken', () => {
-        const result = parse('$skiptoken=ID-12345');
-        expect(result.skip).toEqual(10);
+        const result = parse('$skiptoken=llamas');
+        expect(result.skipToken).toEqual("llamas");
     });
     test('count', () => {
         const result = parse('$count=true');
