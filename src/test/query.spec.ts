@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'bun:test';
 import { createQuery, SQLLang } from '../parser/main';
 
 const parse = (input: string) => {
@@ -5,50 +6,50 @@ const parse = (input: string) => {
 }
 
 describe('Query string processing', () => {
-    test('filter', () => {
+    it('filter', () => {
         const result = parse('$filter=value eq 123');
         expect(result.where).toContain('type::field($field1) = $literal1');
     });
-    test('top', () => {
+    it('top', () => {
         const result = parse('$top=5');
         expect(result.limit).toEqual(5);
     });
-    test('skip', () => {
+    it('skip', () => {
         const result = parse('$skip=10');
         expect(result.skip).toEqual(10);
     });
-    test('skiptoken', () => {
+    it('skiptoken', () => {
         const result = parse('$skiptoken=llamas');
         expect(result.skipToken).toEqual("llamas");
     });
-    test('count', () => {
+    it('count', () => {
         const result = parse('$count=true');
         expect(result.inlinecount).toEqual(true);
     });
-    test('select', () => {
+    it('select', () => {
         const result = parse('$select=id,label');
         expect(result.select).toContain('type::field($select0), type::field($select1)');
     });
-    test('orderby', () => {
+    it('orderby', () => {
         const result = parse('$orderby=id,label');
         expect(result.orderby).toContain('id ASC, label ASC');
     });
-    test('format', () => {
+    it('format', () => {
         const result = parse('$format=atom');
         expect(result.format).toEqual('atom');
     });
 
-    // test('search', () => {
+    // it('search', () => {
     //     const result = parse('$search=atom');
     //     expect(result.search).toEqual('atom');
     // });
 
-    // test('expand', () => {
+    // it('expand', () => {
     //     const result = createQuery('$filter=value eq 123');
     //     expect(result).toContain('type::field($field1) = $literal1');
     // });
 
-    test('Multi-prop 1', () => {
+    it('Multi-prop 1', () => {
         const result = parse('$filter=value eq 123&$top=5&$skip=10&$count=true&$select=id,label');
         expect(result.where).toContain('type::field($field1) = $literal1');
         expect(result.limit).toEqual(5);
@@ -57,7 +58,7 @@ describe('Query string processing', () => {
         expect(result.select).toContain('type::field($select0), type::field($select1)');
     });
 
-    test('Multi-prop 2', () => {
+    it('Multi-prop 2', () => {
         const result = parse('$select=id,label&$filter=value eq 123&$top=5&$skip=10&$count=true');
         expect(result.where).toContain('type::field($field1) = $literal1');
         expect(result.limit).toEqual(5);
@@ -66,7 +67,7 @@ describe('Query string processing', () => {
         expect(result.select).toContain('type::field($select0), type::field($select1)');
     });
 
-    test('Multi-prop 3', () => {
+    it('Multi-prop 3', () => {
         const result = parse('$count=true&$select=id,label&$filter=value eq 123&$top=5&$skip=10');
         expect(result.where).toContain('type::field($field1) = $literal1');
         expect(result.limit).toEqual(5);
@@ -75,7 +76,7 @@ describe('Query string processing', () => {
         expect(result.select).toContain('type::field($select0), type::field($select1)');
     });
 
-    test('Multi-prop 4', () => {
+    it('Multi-prop 4', () => {
         const result = parse('$skip=10&$count=true&$select=id,label&$filter=value eq 123&$top=5');
         expect(result.where).toContain('type::field($field1) = $literal1');
         expect(result.limit).toEqual(5);

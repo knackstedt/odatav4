@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'bun:test';
 import { createQuery, SQLLang } from '../parser/main';
 
 const processFilter = (filter: string) => {
@@ -6,69 +7,69 @@ const processFilter = (filter: string) => {
 
 // Basic comparison tests
 describe('Basic comparisons', () => {
-    test('equals operator', () => {
+    it('equals operator', () => {
         const result = processFilter('$filter=value eq 123');
         expect(result).toContain('type::field($field1) = $literal1');
     });
 
-    test('not equals operator', () => {
+    it('not equals operator', () => {
         const result = processFilter('$filter=value ne 123');
         expect(result).toContain('type::field($field1) != $literal1');
     });
 
-    test('greater than operator', () => {
+    it('greater than operator', () => {
         const result = processFilter('$filter=value gt 123');
         expect(result).toContain('type::field($field1) > $literal1');
     });
 
-    test('greater than or equal operator', () => {
+    it('greater than or equal operator', () => {
         const result = processFilter('$filter=value ge 123');
         expect(result).toContain('type::field($field1) >= $literal1');
     });
 
-    test('less than operator', () => {
+    it('less than operator', () => {
         const result = processFilter('$filter=value lt 123');
         expect(result).toContain('type::field($field1) < $literal1');
     });
 
-    test('less than or equal operator', () => {
+    it('less than or equal operator', () => {
         const result = processFilter('$filter=value le 123');
         expect(result).toContain('type::field($field1) <= $literal1');
     });
 
-    test('complex less than or equal operator', () => {
+    it('complex less than or equal operator', () => {
         const result = processFilter('$filter=(value add 123) le 456');
         expect(result).toContain('(type::field($field1) + $literal1) <= $literal2');
     });
 
-    test('string comparison', () => {
+    it('string comparison', () => {
         const result = processFilter("$filter=name eq 'John'");
         expect(result).toContain("type::field($field1) = $literal1");
     });
 });
 
 describe('Mathematical modifiers', () => {
-    test('add operator', () => {
+    it('add operator', () => {
         const result = processFilter('$filter=(notes add users) gt 456');
         expect(result).toContain('(type::field($field1) + type::field($field2)) > $literal1');
     });
 
-    test('sub operator', () => {
+    it('sub operator', () => {
         const result = processFilter('$filter=(notes sub users) gt 456');
         expect(result).toContain('(type::field($field1) - type::field($field2)) > $literal1');
     });
 
-    test('mul operator', () => {
+    it('mul operator', () => {
         const result = processFilter('$filter=(notes mul users) gt 456');
         expect(result).toContain('(type::field($field1) * type::field($field2)) > $literal1');
     });
 
-    test('div operator', () => {
+    it('div operator', () => {
         const result = processFilter('$filter=(notes div users) gt 456');
         expect(result).toContain('(type::field($field1) / type::field($field2)) > $literal1');
     });
 
-    test('mod operator', () => {
+    it('mod operator', () => {
         const result = processFilter('$filter=(notes mod users) lt 456');
         expect(result).toContain('(type::field($field1) % type::field($field2)) < $literal1');
     });
@@ -76,23 +77,23 @@ describe('Mathematical modifiers', () => {
 
 // Logical operators
 describe('Logical operators', () => {
-    test('and operator', () => {
+    it('and operator', () => {
         const result = processFilter("$filter=age gt 18 and name eq 'John'");
         expect(result).toContain("type::field($field1) > $literal1 && type::field($field2) = $literal2");
     });
 
-    test('or operator', () => {
+    it('or operator', () => {
         const result = processFilter("$filter=age lt 12 or age gt 65");
         expect(result).toContain("type::field($field1) < $literal1 || type::field($field2) > $literal2");
     });
 
-    test('not operator', () => {
+    it('not operator', () => {
         // ???
         const result = processFilter("$filter=not (age gt 18)");
         expect(result).toContain("!((type::field($field1) > $literal1))");
     });
 
-    test('complex condition', () => {
+    it('complex condition', () => {
         const result = processFilter("$filter=(age lt 12 or age gt 65) and active eq true");
         expect(result).toContain("(((type::field($field1) < $literal1 || type::field($field2) > $literal2)) && type::field($field3) = $literal3)");
     });
@@ -100,17 +101,17 @@ describe('Logical operators', () => {
 
 // String functions
 describe('String functions', () => {
-    test('contains function', () => {
+    it('contains function', () => {
         const result = processFilter("$filter=contains(name, 'oh')");
         expect(result).toContain("string::contains(type::field($field1), type::string($param1))");
     });
 
-    test('startswith function', () => {
+    it('startswith function', () => {
         const result = processFilter("$filter=startswith(name, 'J')");
         expect(result).toContain("string::starts_with(type::field($field1), type::string($param1))");
     });
 
-    test('endswith function', () => {
+    it('endswith function', () => {
         const result = processFilter("$filter=endswith(name, 'n')");
         expect(result).toContain("string::ends_with(type::field($field1), type::string($param1))");
     });
@@ -119,22 +120,22 @@ describe('String functions', () => {
 
 // Math operations
 describe('Math operations', () => {
-    test('add operation', () => {
+    it('add operation', () => {
         const result = processFilter("$filter=price add 10 gt 100");
         expect(result).toContain("type::field($field1) + $literal1 > $literal2");
     });
 
-    test('sub operation', () => {
+    it('sub operation', () => {
         const result = processFilter("$filter=price sub 10 lt 50");
         expect(result).toContain("type::field($field1) - $literal1 < $literal2");
     });
 
-    test('mul operation', () => {
+    it('mul operation', () => {
         const result = processFilter("$filter=price mul 1.1 gt price");
         expect(result).toContain("type::field($field1) * $literal1 > type::field($field2)");
     });
 
-    test('div operation', () => {
+    it('div operation', () => {
         const result = processFilter("$filter=price div 2 le 50");
         expect(result).toContain("type::field($field1) / $literal1 <= $literal2");
     });
@@ -143,13 +144,13 @@ describe('Math operations', () => {
 
 // Complex expressions
 describe('Complex expressions', () => {
-    test('nested conditions with multiple operators', () => {
+    it('nested conditions with multiple operators', () => {
         const query = "$filter=(age gt 20 and age lt 30) or (status eq 'premium' and subscribed eq true)";
         const result = processFilter(query);
         expect(result).toContain("(((type::field($field1) > $literal1 && type::field($field2) < $literal2)) || ((type::field($field3) = $literal3 && type::field($field4) = $literal4)))");
     });
 
-    test('combined string and numeric operations', () => {
+    it('combined string and numeric operations', () => {
         const query = "$filter=startswith(name, 'J') and (age add 10) gt 30";
         const result = processFilter(query);
         expect(result).toContain("(string::starts_with(type::field($field1), type::string($param1)) && (type::field($field2) + $literal2) > $literal3)");
@@ -158,19 +159,19 @@ describe('Complex expressions', () => {
 
 // // $expand support
 // describe('expand support', () => {
-//     test('simple expand with filter', () => {
+//     it('simple expand with filter', () => {
 //         const query = "$filter=orders($filter=amount gt 100)";
 //         const result = processFilter(query);
 //         expect(result).toContain("orders WHERE amount > 100");
 //     });
 
-//     test('nested expand with multiple filters', () => {
+//     it('nested expand with multiple filters', () => {
 //         const query = "$filter=customers($filter=age gt 30;$expand=orders($filter=amount gt 200))";
 //         const result = processFilter(query);
 //         expect(result).toContain("customers WHERE age > 30 EXPAND orders WHERE amount > 200");
 //     });
 
-//     test('expand with logical conditions', () => {
+//     it('expand with logical conditions', () => {
 //         const query = "$filter=products($filter=price lt 50 and inStock eq true)";
 //         const result = processFilter(query);
 //         expect(result).toContain("products WHERE price < 50 AND inStock = true");
@@ -179,26 +180,26 @@ describe('Complex expressions', () => {
 
 // Error handling
 describe('Valid query handling', () => {
-    test('incomplete filter expression', () => {
+    it('incomplete filter expression', () => {
         expect(() => {
             processFilter("$filter=value eq 123 and title ");
         }).toThrow();
     });
 
-    test('invalid operator', () => {
+    it('invalid operator', () => {
         expect(() => {
             processFilter("$filter=value INVALID 123");
         }).toThrow();
     });
 
     // TODO:
-    // test('invalid key', () => {
+    // it('invalid key', () => {
     //     expect(() => {
     //         processFilter("$filter=va.lue eq 123");
     //     }).toThrow();
     // });
 
-    test('invalid value', () => {
+    it('invalid value', () => {
         expect(() => {
             processFilter("$filter=value eq str'ing");
         }).toThrow();
