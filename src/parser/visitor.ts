@@ -173,7 +173,7 @@ export class Visitor {
         if (node) {
             const visitor = this[`Visit${node.type}`];
             if (!visitor) {
-                throw new ODataV4ParseError({ msg: `Unhandled node type: ${node.type}`, node });
+                throw new ODataV4ParseError({ msg: `Unhandled node type: ${node.type}`, props: { node } });
             }
             visitor.call(this, node, context);
         }

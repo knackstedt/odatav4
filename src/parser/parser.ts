@@ -1,9 +1,9 @@
-import Lexer from "./lexer";
-import PrimitiveLiteral from "./primitive-literal";
 import Expressions from "./expressions";
+import Lexer from "./lexer";
+import ODataUri from "./odata-uri";
+import PrimitiveLiteral from "./primitive-literal";
 import Query from "./query";
 import ResourcePath from "./resource-path";
-import ODataUri from "./odata-uri";
 import Utils, { ODataV4ParseError } from './utils';
 
 export const parserFactory = function (
@@ -26,11 +26,15 @@ export const parserFactory = function (
 
             throw new ODataV4ParseError({
                 msg: `Parse error at index ${pos}. No parse found.`,
-                source,
-                marker,
-                character: Utils.stringify(raw, pos, pos + 1),
+                value: raw,
                 index: pos,
-                at,
+                props: {
+                    source,
+                    marker,
+                    character: Utils.stringify(raw, pos, pos + 1),
+                    index: pos,
+                    at,
+                }
             });
         }
 
@@ -43,11 +47,15 @@ export const parserFactory = function (
 
             throw new ODataV4ParseError({
                 msg: `Parse error at index ${pos}. Incompletely parsed query ${result.next}/${raw.length}.`,
-                source,
-                marker,
-                character: Utils.stringify(raw, result.next, result.next + 1),
+                value: raw,
                 index: result.next,
-                at,
+                props:  {
+                    source,
+                    marker,
+                    character: Utils.stringify(raw, result.next, result.next + 1),
+                    index: result.next,
+                    at,
+                }
             });
         }
 

@@ -41,7 +41,7 @@ export class ODataV4ParseError extends Error {
     processed?: string;
     remaining?: string;
 
-    constructor(err: { msg: string; value?: number[] | Uint16Array; index?: number }) {
+    constructor(err: { msg: string; value?: number[] | Uint16Array; index?: number, props?: { [key: string]: any} }) {
         super("ODataV4ParseError: " + err['msg']);
 
         if (err.value) {
