@@ -1,5 +1,7 @@
 import * as express from 'express';
 import type { Surreal } from 'surrealdb';
+import { SqlOptions } from './parser/main';
+import { Visitor } from './parser/visitor';
 
 export type ODataExpressHooks<T = Record<any, any>> = {
     selectQuery: (sql: string) => Promise<T[]>,
@@ -189,4 +191,21 @@ export type ODataExpressConfig = {
      */
     // maxPageSize?: number
 };
+
+
+export interface ParsedQuery {
+    select?: string;
+    where?: string;
+    orderby?: string;
+    limit?: number;
+    skip?: number;
+    includes?: Visitor[];
+    format?: string;
+    count?: boolean;
+    skipToken?: string;
+    search?: string;
+    options?: SqlOptions;
+    parameters?: Map<string, any>;
+}
+
 

@@ -3,8 +3,9 @@ import { route } from './util';
 
 import { RecordId, Surreal } from 'surrealdb';
 import { createQuery, SQLLang } from '../parser/main';
+import { renderQuery } from '../parser/query-renderer';
 import { Visitor } from '../parser/visitor';
-import { ODataExpressConfig, ODataExpressTable } from '../types';
+import { ODataExpressConfig, ODataExpressTable, ParsedQuery } from '../types';
 import { getJSONSchema, getODataMetadata } from '../util/metadata';
 
 
@@ -113,109 +114,65 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
     };
 };
 
+export const parseODataRequest = (
+    urlPath: string
+): ParsedQuery => {
+    // If we don't get a full URL, fake one.
+    if (!/https?:\/\//.test(urlPath)) {
+        urlPath = 'http://localhost' + (urlPath.startsWith('/') ? '' : '/') + urlPath;
+    }
+    const url = new URL(urlPath);
+    const query = url.search.startsWith('?') ? url.search.slice(1) : url.search;
+    const odataQuery = decodeURIComponent(query.trim());
+
+    if (!odataQuery) {
+        return {
+            select: '*',
+            where: undefined,
+            orderby: undefined,
+            limit: undefined,
+            skip: undefined,
+            includes: [],
+            parameters: new Map()
+        };
+    }
+
+    const rootNode = createQuery(odataQuery, {
+        type: SQLLang.SurrealDB
+    });
+
+    return {
+        where: rootNode.where,
+        select: rootNode.select,
+        orderby: rootNode.orderby,
+        limit: rootNode.limit,
+        skip: rootNode.skip,
+        includes: rootNode.includes,
+        parameters: rootNode.parameters,
+
+        format: rootNode.format,
+        count: rootNode.inlinecount,
+        skipToken: rootNode.skipToken,
+        search: rootNode.search
+    };
+};
+
 
 /**
  * Parse the request URL and build queries
  */
 export const ODataV4ToSurrealQL = (
     table: string,
-    urlPath: string,
+    urlPath: string | ParsedQuery,
     fetch = [] as string | string[]
 ) => {
-    // If we don't get a full URL, fake one.
-    if (!/https?:\/\//.test(urlPath)) {
-        urlPath = 'http://localhost' + (urlPath.startsWith('/') ? '' : '/') + urlPath;
-    }
-    const url = new URL(urlPath);
-    const queryString = url.search;
-
-    const hasFilter =
-        queryString?.includes("$select") ||
-        queryString?.includes("$filter") ||
-        queryString?.includes("$group") ||
-        queryString?.includes("$expand") ||
-        queryString?.includes("$top") ||
-        queryString?.includes("$fetch") ||
-        queryString?.includes("$order");
-
-    const query = queryString.startsWith("?") ? queryString.slice(1) : queryString;
-    const odataQuery = decodeURIComponent(query.trim());
-
-
-    // Note: createQuery throws an error if there is leading or trailing whitespace on odata params
-    // It also throws an error if there are query params that aren't known to the odata spec.
-    // TODO: Strip unknown params instead of throwing an error?
-    const rootNode = hasFilter ? createQuery(odataQuery, {
-        type: SQLLang.SurrealDB
-    }) : {  } as Visitor;
-    let {
-        where,
-        select,
-        orderby,
-        limit,
-        skip,
-        parameters,
-    } = rootNode;
-
-    // There are some cases where select may be undefined.
-    select ??= "*";
-    parameters ??= new Map();
-
-    // Initiate a query to count the number of total records that match
-    const countQuery = [
-        `SELECT count() FROM type::table($table)`,
-        `${where ? `WHERE ${where}` : ''}`,
-        'GROUP ALL'
-    ].filter(i => i).join(' ');
-
-    const doExpand = (node: Visitor, path = '') => {
-        for (let i = 0; i < node.includes?.length; i++) {
-            const include = node.includes[i];
-            path = path + include.navigationProperty;
-
-            select += ', ' + include.navigationProperty + '.' + include.select;
-
-            include.parameters.forEach((value, key) => {
-                parameters.set(path + '.' + key, value);
-            });
-
-            doExpand(include, path + '.');
-        }
-    }
-    doExpand(rootNode);
-
-
-    // Build a full query that we will throw at surreal
-    let entriesQuery = [
-        `SELECT ${select} FROM type::table($table)`,
-        `${where ? `WHERE ${where}` : ''}`,
-        (typeof orderby == "string" && orderby != '1') ? `ORDER BY ${orderby}` : '',
-        typeof limit == "number" ? `LIMIT ${limit}` : '',
-        typeof skip == "number" ? `START ${skip}` : '',
-    ].filter(i => i).join(' ');
-
-    if (fetch) {
-        if (!Array.isArray(fetch))
-            fetch = [fetch];
-
-        if (fetch.length > 0) {
-            entriesQuery += ` FETCH `;
-            entriesQuery += fetch.map((field, idx) => {
-                parameters.set(`$fetch${idx}`, field);
-                return `$fetch${idx}`;
-            }).join(', ');
-        }
-    }
-
-    // Pass the table as a parameter to avoid injection attacks.
-    parameters.set("$table", table);
+    const parsed = typeof urlPath === 'string'
+        ? parseODataRequest(urlPath)
+        : urlPath;
 
     return {
-        countQuery,
-        entriesQuery,
-        parameters: Object.fromEntries(parameters),
-        skip,
-        limit
+        ...parsed,
+        ...renderQuery(parsed, table, fetch)
     };
 };
 
@@ -230,7 +187,8 @@ export const RunODataV4SelectFilter = async (
     db: Surreal,
     table: string,
     urlPath: string,
-    fetch = [] as string | string[]
+    fetch = [] as string | string[],
+    parsed?: ParsedQuery
 ) => {
 
     let {
@@ -241,7 +199,7 @@ export const RunODataV4SelectFilter = async (
         limit
     } = await ODataV4ToSurrealQL(
         table,
-        urlPath,
+        parsed || urlPath,
         fetch
     );
     limit ??= 0;
@@ -265,9 +223,9 @@ export const RunODataV4SelectFilter = async (
     data ??= [];
     const count = countResult?.[0]?.[0]?.count || 0;
 
-    const pageSize = 100;
+    const pageSize = (limit && limit > 0) ? limit : 100;
 
-    const url = new URL(urlPath);
+    const url = new URL(urlPath, 'http://localhost');
     url.searchParams.set('$skip', skip + data.length);
     url.searchParams.set('$top', pageSize as any);
 
@@ -468,6 +426,11 @@ export const SurrealODataV4Middleware = (
     router.config = config;
 
     router.use(route(async (req, res, next) => {
+        try {
+            req['odata'] = parseODataRequest(req.url);
+        } catch (e) {
+            // Ignore parsing errors here, they will be caught later if needed
+        }
         req['db'] = connection instanceof Surreal ? connection : await connection(req);
         next();
     }));
@@ -563,7 +526,8 @@ export const SurrealODataV4Middleware = (
             db,
             table,
             url.toString(),
-            tableConfig.fetch
+            tableConfig.fetch,
+            req['odata']
         );
 
         if (typeof tableConfig.afterRecordGet == "function") {
