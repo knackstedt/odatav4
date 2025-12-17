@@ -1,14 +1,15 @@
-import Utils from "./utils";
-import Lexer from "./lexer";
-import PrimitiveLiteral from "./primitive-literal";
-import NameOrIdentifier from "./name-or-identifier";
 import Expressions from "./expressions";
+import Lexer from "./lexer";
+import NameOrIdentifier from "./name-or-identifier";
+import PrimitiveLiteral from "./primitive-literal";
+import Utils, { ODataV4ParseError } from "./utils";
 
 export namespace Query {
     export function queryOptions(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
         let token = Query.queryOption(value, index, metadataContext);
         if (!token) return;
-        let start = index;
+
+        const start = index;
         index = token.next;
 
         let options = [];
@@ -343,7 +344,7 @@ export namespace Query {
             if (Utils.equals(value, index, "$search")) {
                 index += 7;
             }
-            else return;
+        else return;
 
         let eq = Lexer.EQ(value, index);
         if (!eq) return;
@@ -674,6 +675,9 @@ export namespace Query {
             format = "xml";
             index += 3;
         }
+        else {
+            throw new ODataV4ParseError({ msg: "Invalid $format", value, index });
+        }
 
         if (format) return Lexer.tokenize(value, start, index, { format }, Lexer.TokenType.Format);
     }
@@ -705,11 +709,10 @@ export namespace Query {
         if (Utils.equals(value, index, "%24select")) {
             index += 9;
         }
-        else
-            if (Utils.equals(value, index, "$select")) {
-                index += 7;
-            }
-            else return;
+        else if (Utils.equals(value, index, "$select")) {
+            index += 7;
+        }
+        else return;
 
         let eq = Lexer.EQ(value, index);
         if (!eq) return;
