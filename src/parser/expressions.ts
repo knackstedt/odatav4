@@ -1,8 +1,8 @@
-import Utils from "./utils";
-import Lexer from "./lexer";
-import PrimitiveLiteral from "./primitive-literal";
-import NameOrIdentifier from "./name-or-identifier";
 import ArrayOrObject from "./json";
+import Lexer from "./lexer";
+import NameOrIdentifier from "./name-or-identifier";
+import PrimitiveLiteral from "./primitive-literal";
+import Utils from "./utils";
 
 export namespace Expressions {
     export function commonExpr(value: Utils.SourceArray, index: number): Lexer.Token {
@@ -63,7 +63,7 @@ export namespace Expressions {
                     left: token.value,
                     right: commonMoreExpr.value
                 };
-                token.next = commonMoreExpr.value.next;
+                token.next = commonMoreExpr.value.next ?? commonMoreExpr.next;
                 token.type = commonMoreExpr.type;
                 token.raw = Utils.stringify(value, token.position, token.next);
             }
@@ -163,7 +163,8 @@ export namespace Expressions {
                 index = Lexer.SKIPWHITESPACE(value, index);
                 expr = commonExpr(value, index);
                 if (!expr) return; // Invalid format - expected expression after comma
-            } else {
+            }
+            else {
                 break;
             }
         }
