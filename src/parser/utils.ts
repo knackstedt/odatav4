@@ -38,9 +38,21 @@ export namespace Utils {
 export default Utils;
 
 export class ODataV4ParseError extends Error {
-    constructor(err: { msg: string; } & { [key: string]: any }) {
-        super(err['msg'] || err['message'] || err['title']);
+    processed?: string;
+    remaining?: string;
 
-        Object.assign(this, err);
+    constructor(err: { msg: string; value?: number[] | Uint16Array; index?: number }) {
+        super("ODataV4ParseError: " + err['msg']);
+
+        if (err.value) {
+            if (err.index !== undefined) {
+                this.processed = Utils.stringify(err.value, 0, err.index);
+                this.remaining = Utils.stringify(err.value, err.index, err.value.length);
+            }
+            else {
+                this.processed = Utils.stringify(err.value, 0, err.index);
+                this.remaining = Utils.stringify(err.value, err.index, err.value.length);
+            }
+        }
     }
 }
