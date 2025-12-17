@@ -1,4 +1,4 @@
-import Utils from "./utils";
+import Utils, { ODataV4ParseError } from "./utils";
 import Lexer from "./lexer";
 import NameOrIdentifier from "./name-or-identifier";
 
@@ -11,15 +11,32 @@ export namespace PrimitiveLiteral {
         if (Utils.equals(value, index, "false")) return Lexer.tokenize(value, index, index + 5, "Edm.Boolean", Lexer.TokenType.Literal);
     }
     export function guidValue(value, index): Lexer.Token {
-        if (Utils.required(value, index, Lexer.HEXDIG, 8, 8) &&
-            value[index + 8] === 0x2d &&
-            Utils.required(value, index + 9, Lexer.HEXDIG, 4, 4) &&
-            value[index + 13] === 0x2d &&
-            Utils.required(value, index + 14, Lexer.HEXDIG, 4, 4) &&
-            value[index + 18] === 0x2d &&
-            Utils.required(value, index + 19, Lexer.HEXDIG, 4, 4) &&
-            value[index + 23] === 0x2d &&
-            Utils.required(value, index + 24, Lexer.HEXDIG, 12)) return Lexer.tokenize(value, index, index + 36, "Edm.Guid", Lexer.TokenType.Literal);
+        if (Utils.required(value, index, Lexer.HEXDIG, 8, 8)) {
+            if (value[index + 8] === 0x2d) {
+                if (Utils.required(value, index + 9, Lexer.HEXDIG, 4, 4)) {
+                    if (value[index + 13] === 0x2d) {
+                        if (Utils.required(value, index + 14, Lexer.HEXDIG, 4, 4)) {
+                            if (value[index + 18] === 0x2d) {
+                                if (Utils.required(value, index + 19, Lexer.HEXDIG, 4, 4)) {
+                                    if (value[index + 23] === 0x2d) {
+                                        if (Utils.required(value, index + 24, Lexer.HEXDIG, 12)) {
+                                            return Lexer.tokenize(value, index, index + 36, "Edm.Guid", Lexer.TokenType.Literal);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // If it matched the first 8 hex digits, it's highly likely a GUID.
+            // Throw error if subsequent checks fail.
+            throw new ODataV4ParseError({
+                msg: "Invalid GUID format",
+                value: value,
+                index: index
+            });
+        }
     }
     export function sbyteValue(value: Utils.SourceArray, index: number): Lexer.Token {
         let start = index;
@@ -258,12 +275,41 @@ export namespace PrimitiveLiteral {
     }
     export function dateValue(value: Utils.SourceArray, index: number): Lexer.Token {
         let yearNext = Lexer.year(value, index);
-        if (yearNext === index || value[yearNext] !== 0x2d) return;
+        if (yearNext === index) return;
+        if (value[yearNext] !== 0x2d) {
+            return;
+        }
+
         let monthNext = Lexer.month(value, yearNext + 1);
-        if ((monthNext === yearNext + 1) || value[monthNext] !== 0x2d) return;
+        if (monthNext === yearNext + 1) {
+            // Had year and dash, but invalid month.
+            throw new ODataV4ParseError({
+                msg: "Invalid Date format: Invalid or missing month",
+                value: value,
+                index: yearNext + 1
+            });
+        }
+        if (value[monthNext] !== 0x2d) {
+            // Year-Month but no dash. Could be YYYY-MM expression? 
+            // Unlikely to be interpretation.
+            throw new ODataV4ParseError({
+                msg: "Invalid Date format: Missing second separator",
+                value: value,
+                index: monthNext
+            });
+        }
+
         let dayNext = Lexer.day(value, monthNext + 1);
         // TODO: join dateValue and dateTimeOffsetValue for optimalization
-        if (dayNext === monthNext + 1 || value[dayNext] === 0x54) return;
+        if (dayNext === monthNext + 1) {
+            throw new ODataV4ParseError({
+                msg: "Invalid Date format: Invalid or missing day",
+                value: value,
+                index: monthNext + 1
+            });
+        }
+
+        if (value[dayNext] === 0x54) return;
         return Lexer.tokenize(value, index, dayNext, "Edm.Date", Lexer.TokenType.Literal);
     }
     export function dateTimeOffsetValue(value: Utils.SourceArray, index: number): Lexer.Token {

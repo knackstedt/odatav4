@@ -32,7 +32,7 @@ describe('Query string processing', () => {
     });
     it('orderby', () => {
         const result = parse('$orderby=id,label');
-        expect(result.orderby).toContain('id ASC, label ASC');
+        expect(result.orderby).toContain('`id` ASC, `label` ASC');
     });
     it('format', () => {
         const result = parse('$format=atom');
