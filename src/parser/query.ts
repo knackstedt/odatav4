@@ -344,7 +344,7 @@ export namespace Query {
             if (Utils.equals(value, index, "$search")) {
                 index += 7;
             }
-        else return;
+            else return;
 
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $search", value, index });
@@ -572,6 +572,7 @@ export namespace Query {
             let comma = Lexer.COMMA(value, index);
             if (comma) {
                 index = comma;
+                index = Lexer.SKIPWHITESPACE(value, index);
                 token = Query.orderbyItem(value, index);
                 if (!token) throw new ODataV4ParseError({ msg: "Expected $orderby item after ','", value, index });
                 index = token.next;

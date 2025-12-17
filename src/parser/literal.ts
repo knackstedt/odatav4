@@ -43,7 +43,7 @@ export class Literal {
     'Edm.Guid'(value: string) {
         const decoded = decodeURIComponent(value);
         // Note: this doesn't verify a specific GUID version, just the general format.
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded)) {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded)) {
             throw new ODataV4ParseError({ msg: `Guid ${value} is invalid` });
         }
         return decoded;

@@ -536,7 +536,7 @@ export class Visitor {
                 this.where += "```";
                 this.Visit(node.value.right, context);
 
-                const [ field, literal ] = this.where.split("```");
+                const [field, literal] = this.where.split("```");
 
                 this.where = where;
 
@@ -695,30 +695,36 @@ export class Visitor {
 
                 break;
             case "indexof":
-                fn = "";
-                switch (this.type) {
-                    case SQLLang.SurrealDB:
-                        fn = 'array::find_index'
-                    case SQLLang.MsSql:
-                        fn = "CHARINDEX";
-                        break;
-                    case SQLLang.ANSI:
-                    case SQLLang.MySql:
-                    case SQLLang.PostgreSql:
-                    default:
-                        fn = "INSTR";
-                        break;
+                if (this.type == SQLLang.SurrealDB) {
+                    this[target] += 'array::find_index(';
+                    this.Visit(params[0], context);
+                    this[target] += ', ';
+                    this.Visit(params[1], context);
+                    this[target] += ")";
+                } else {
+                    fn = "";
+                    switch (this.type) {
+                        case SQLLang.MsSql:
+                            fn = "CHARINDEX";
+                            break;
+                        case SQLLang.ANSI:
+                        case SQLLang.MySql:
+                        case SQLLang.PostgreSql:
+                        default:
+                            fn = "INSTR";
+                            break;
+                    }
+                    if (fn === "CHARINDEX") {
+                        const tmp = params[0];
+                        params[0] = params[1];
+                        params[1] = tmp;
+                    }
+                    this[target] += `${fn}(`;
+                    this.Visit(params[0], context);
+                    this[target] += ', ';
+                    this.Visit(params[1], context);
+                    this[target] += ") - 1";
                 }
-                if (fn === "CHARINDEX") {
-                    const tmp = params[0];
-                    params[0] = params[1];
-                    params[1] = tmp;
-                }
-                this[target] += `${fn}(`;
-                this.Visit(params[0], context);
-                this[target] += ', ';
-                this.Visit(params[1], context);
-                this[target] += ") - 1";
                 break;
             case "round":
                 this[target] += this.type == SQLLang.SurrealDB ? "math::round(" : "ROUND(";
@@ -746,12 +752,14 @@ export class Visitor {
                     this.Visit(params[0], context);
                     this[target] += ")";
                 }
+                break;
             case "ceiling":
                 if (this.type == SQLLang.SurrealDB) {
                     this[target] += `math::ceil(`
                     this.Visit(params[0], context);
                     this[target] += ")";
                 }
+                break;
             case "year":
             case "month":
             case "day":
