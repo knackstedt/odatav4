@@ -34,12 +34,18 @@ export enum SQLLang {
 export class Visitor {
     protected options: SqlOptions;
     type: SQLLang;
+
     select = "";
     where = "";
     orderby = "";
     skip: number;
     limit: number;
     inlinecount: boolean;
+    format: string;
+    skipToken: string;
+    search: string;
+    specificId: string;
+
     navigationProperty: string;
     includes: Visitor[] = [];
     parameters = new Map<string, any>();
@@ -165,18 +171,18 @@ export class Visitor {
         context = context || { target: "where" };
 
         if (node) {
-            var visitor = this[`Visit${node.type}`];
-            if (visitor) visitor.call(this, node, context);
-            else {
+            const visitor = this[`Visit${node.type}`];
+            if (!visitor) {
                 throw new ODataV4ParseError({ msg: `Unhandled node type: ${node.type}`, node });
             }
+            visitor.call(this, node, context);
         }
 
         // Why is this needed?
         if (node == this.ast) {
-            if (!this.select) this.select = `*`;
-            if (!this.where) this.where = "1 = 1";
-            if (!this.orderby) this.orderby = "1";
+            this.select ||= `*`;
+            this.where ||= "1 = 1";
+            this.orderby ||= "1";
         }
         return this;
     }
@@ -224,7 +230,28 @@ export class Visitor {
     protected VisitFilter(node: Lexer.Token, context: any) {
         context.target = "where";
         this.Visit(node.value, context);
-        if (!this.where) this.where = "1 = 1";
+        this.where ||= "1 = 1";
+    }
+
+    protected VisitFormat(node: Lexer.Token, context: any) {
+        this.format = node.value.format;
+    }
+
+    protected VisitSkipToken(node: Lexer.Token, context: any) {
+        this.skipToken = node.value;
+    }
+
+    protected VisitSearch(node: Lexer.Token, context: any) {
+        // TODO: this is a placeholder implementation -- it is broken.
+        this.search = node.value.value;
+
+        // VisitSearchAndExpression;
+        // VisitSearchOrExpression;
+        // VisitSearchNotExpression;
+    }
+
+    protected VisitId(node: Lexer.Token, context: any) {
+        this.specificId = node.value;
     }
 
     protected VisitOrderBy(node: Lexer.Token, context: any) {
@@ -342,6 +369,88 @@ export class Visitor {
         this.where += "(";
         this.Visit(node.value, context);
         this.where += ")";
+    }
+
+    protected VisitParenExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+        this[target] += "(";
+        this.Visit(node.value, context);
+        this[target] += ")";
+    }
+
+    protected VisitAddExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+
+        if (this.type == SQLLang.SurrealDB) {
+            this.Visit(node.value.left, context);
+            this[target] += " + ";
+            this.Visit(node.value.right, context);
+        }
+        else {
+            this.Visit(node.value.left, context);
+            this[target] += " + ";
+            this.Visit(node.value.right, context);
+        }
+    }
+
+    protected VisitSubExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+
+        if (this.type == SQLLang.SurrealDB) {
+            this.Visit(node.value.left, context);
+            this[target] += " - ";
+            this.Visit(node.value.right, context);
+        }
+        else {
+            this.Visit(node.value.left, context);
+            this[target] += " - ";
+            this.Visit(node.value.right, context);
+        }
+    }
+
+    protected VisitMulExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+
+        if (this.type == SQLLang.SurrealDB) {
+            this.Visit(node.value.left, context);
+            this[target] += " * ";
+            this.Visit(node.value.right, context);
+        }
+        else {
+            this.Visit(node.value.left, context);
+            this[target] += " * ";
+            this.Visit(node.value.right, context);
+        }
+    }
+
+    protected VisitDivExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+
+        if (this.type == SQLLang.SurrealDB) {
+            this.Visit(node.value.left, context);
+            this[target] += " / ";
+            this.Visit(node.value.right, context);
+        }
+        else {
+            this.Visit(node.value.left, context);
+            this[target] += " / ";
+            this.Visit(node.value.right, context);
+        }
+    }
+
+    protected VisitModExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+
+        if (this.type == SQLLang.SurrealDB) {
+            this.Visit(node.value.left, context);
+            this[target] += " % ";
+            this.Visit(node.value.right, context);
+        }
+        else {
+            this.Visit(node.value.left, context);
+            this[target] += " % ";
+            this.Visit(node.value.right, context);
+        }
     }
 
     protected VisitCommonExpression(node: Lexer.Token, context: any) {
