@@ -4,7 +4,6 @@ import { route } from './util';
 import { RecordId, Surreal } from 'surrealdb';
 import { createQuery, SQLLang } from '../parser/main';
 import { renderQuery } from '../parser/query-renderer';
-import { Visitor } from '../parser/visitor';
 import { ODataExpressConfig, ODataExpressTable, ParsedQuery } from '../types';
 import { getJSONSchema, getODataMetadata } from '../util/metadata';
 
@@ -52,6 +51,10 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
     // If the ID is contained within mathematical brackets, peel the real ID out.
     if (/^⟨[^⟩]+⟩$/.test(targetId)) {
         targetId = targetId.slice(1, -1);
+    }
+
+    if (targetId && !isNaN(Number(targetId))) {
+        targetId = Number(targetId) as any;
     }
 
     if (!targetTable) {
@@ -188,20 +191,36 @@ export const RunODataV4SelectFilter = async (
     table: string,
     urlPath: string,
     fetch = [] as string | string[],
-    parsed?: ParsedQuery
+    parsed?: ParsedQuery,
+    maxPageSize?: number
 ) => {
+
+    // Ensure we have a parsed query object
+    if (!parsed) {
+        parsed = parseODataRequest(urlPath);
+    }
+
+    // Enforce maxPageSize
+    if (maxPageSize !== undefined && maxPageSize > 0) {
+        if (parsed.limit === undefined || parsed.limit > maxPageSize) {
+            parsed.limit = maxPageSize;
+        }
+    }
+
+    const converterResult = await ODataV4ToSurrealQL(
+        table,
+        parsed,
+        fetch
+    );
 
     let {
         countQuery,
         entriesQuery,
         parameters,
         skip,
-        limit
-    } = await ODataV4ToSurrealQL(
-        table,
-        parsed || urlPath,
-        fetch
-    );
+        limit,
+        count: includeCount
+    } = converterResult;
     limit ??= 0;
     skip ??= 0;
 
@@ -213,21 +232,32 @@ export const RunODataV4SelectFilter = async (
         parameters[k.slice(1)] = parameters[k];
     });
 
-    let [
-        countResult,
-        [data]
-    ] = await Promise.all([
-        db.query(countQuery, parameters).collect<any>(),
-        db.query(entriesQuery, parameters).collect<any[]>()
-    ]);
-    data ??= [];
-    const count = countResult?.[0]?.[0]?.count || 0;
+    let countResult, data;
+    try {
+        const [rawCountResult, rawData] = await Promise.all([
+            db.query(countQuery.toString(), parameters).collect<any[]>(),
+            db.query(entriesQuery.toString(), parameters).collect<any[]>()
+        ]);
+
+        // SurrealDB's collect() returns an array of result arrays, one for each query.
+        // If we passed a single query, it's [ [result1, result2, ...] ].
+        countResult = (rawCountResult?.[0] || []) as any[];
+        data = (rawData?.[0] || []) as any[];
+    } catch (e) {
+        console.error("SurrealDB Query Error:", e);
+        console.error("Query:", entriesQuery);
+        console.error("Parameters:", JSON.stringify(parameters, null, 2));
+        throw e;
+    }
+
+    const actualData = (data || []) as any[];
+    const count = countResult?.[0]?.count || 0;
 
     const pageSize = (limit && limit > 0) ? limit : 100;
 
     const url = new URL(urlPath, 'http://localhost');
-    url.searchParams.set('$skip', skip + data.length);
-    url.searchParams.set('$top', pageSize as any);
+    url.searchParams.set('$skip', (skip + actualData.length).toString());
+    url.searchParams.set('$top', pageSize.toString());
 
     // TODO: Implement metadata
 
@@ -235,15 +265,14 @@ export const RunODataV4SelectFilter = async (
     //     ? undefined
     //     : await db.query(`INFO FOR TABLE ${table}`);
 
-    const entriesRead = skip + data.length;
     return {
         // '@odata.metadata': metadata,
         // '@odata.context': `${url.pathname}$metadata#${table}`,
-        '@odata.count': count ?? undefined,
+        '@odata.count': includeCount ? count : undefined,
         '@odata.nextlink': (skip + pageSize) >= (count as number)
             ? undefined
             : `${url.pathname}?${url.searchParams.toString()}`,
-        value: data
+        value: actualData
     };
 };
 
@@ -317,7 +346,7 @@ const ODataCRUDMethods = async (
             return db.query('RETURN rand::ulid().lowercase()')
                 .collect<[string]>()
                 .then(r => r[0]);
-        }
+        };
 
         let result;
         if (req.method == "POST") {
@@ -392,9 +421,6 @@ const ODataCRUDMethods = async (
 
     if (isBulk) {
         results = results.filter(r => !!r);
-        if (results.length == 0) {
-            // TODO: Should we do anything special here?
-        }
         return results;
     }
     else {
@@ -406,13 +432,21 @@ const ODataCRUDMethods = async (
  * OData V4 Middleware for Express
  * Based on the provided configuration, creates an Express router that
  * handles OData V4 requests, translates them into SurrealDB queries,
- * and returns the results in OData-compliant format.
  */
+const odataJson = (res: express.Response, data: any, status = 200) => {
+    res.status(status).setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(data, (key, value) => {
+        if (typeof value === 'bigint') return value.toString();
+        if (value instanceof RecordId) return value.toString();
+        return value;
+    }));
+};
+
 export const SurrealODataV4Middleware = (
     config: ODataExpressConfig
 ) => {
     const connection = config.resolveDb;
-    const tables: (ODataExpressTable<any> & { _fields?: { type: string } })[] = config.tables;
+    const tables: (ODataExpressTable<any> & { _fields?: { type: string; }; })[] = config.tables;
 
     if (config.enableAutoTypeCasting) {
         // Experimental. TBD.
@@ -422,7 +456,7 @@ export const SurrealODataV4Middleware = (
         throw new Error("No connection resolver specified");
     }
 
-    const router: express.Router & { config: ODataExpressConfig } = express.Router() as any;
+    const router: express.Router & { config: ODataExpressConfig; } = express.Router() as any;
     router.config = config;
 
     router.use(route(async (req, res, next) => {
@@ -493,23 +527,21 @@ export const SurrealODataV4Middleware = (
             let _r = await db.query(query, {
                 ...params,
                 id: new RecordId(table, id)
-            }).collect<[[any]]>();
-            let [[result]] = _r;
+            }).collect<any[][]>();
+            let result = _r?.[0]?.[0];
+
+            if (!result) {
+                res.status(404).send({ error: { message: "Not Found" } });
+                return;
+            }
 
             if (typeof tableConfig.afterRecordGet == "function")
                 result = await tableConfig.afterRecordGet(req, result);
 
-            if (!result) {
-                res.contentType("application/json");
-                res.send('{}');
-                return;
-            }
-
             res.contentType("application/json");
             res.send(JSON.stringify(result, (key, value) => {
-                if (typeof value === 'bigint') {
-                    return value.toString();
-                }
+                if (typeof value === 'bigint') return value.toString();
+                if (value instanceof RecordId) return value.toString();
                 return value;
             }));
             return;
@@ -517,17 +549,13 @@ export const SurrealODataV4Middleware = (
 
         let url = new URL(req.protocol + "://" + req.hostname + req.originalUrl);
 
-        // if (tableConfig.filterStringProcessor) {
-        //     const query = tableConfig.filterStringProcessor(req, url.searchParams['$filter'] || '');
-        //     url.search = query;
-        // }
-
         const result = await RunODataV4SelectFilter(
             db,
             table,
             url.toString(),
             tableConfig.fetch,
-            req['odata']
+            req['odata'],
+            config.maxPageSize
         );
 
         if (typeof tableConfig.afterRecordGet == "function") {
@@ -544,12 +572,12 @@ export const SurrealODataV4Middleware = (
             result.value = processedValues;
         }
 
-        res.set("Content-Type", "application/json");
-        res.send(JSON.stringify(result, (key, value) =>
-            typeof value === 'bigint'
-                ? value.toString() // TODO: This may be lossy. Consider a different approach
-                : value // return everything else unchanged
-        ));
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(result, (key, value) => {
+            if (typeof value === 'bigint') return value.toString();
+            if (value instanceof RecordId) return value.toString();
+            return value;
+        }));
     }));
 
     /**

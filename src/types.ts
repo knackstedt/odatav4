@@ -188,7 +188,7 @@ export type ODataExpressConfig = {
     /**
      * Maximum page size for $top to prevent excessive data retrieval.
      */
-    // maxPageSize?: number
+    maxPageSize?: number;
 };
 
 
