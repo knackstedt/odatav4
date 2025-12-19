@@ -401,7 +401,7 @@ export class Visitor {
         if (this.type == SQLLang.SurrealDB) {
             const fieldSeed = `$select${this.selectSeed++}`;
             this.parameters.set(fieldSeed, node.raw);
-            this.select += `type::field(${fieldSeed})`;
+            this.select += `type::field(${fieldSeed}) AS \`${node.raw.replace(/`/g, '\\`')}\``;
         }
         else {
             let item = node.raw.replace(/\//g, '.');

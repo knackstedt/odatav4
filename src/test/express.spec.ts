@@ -484,7 +484,7 @@ describe("OData V4 - $count Tests", () => {
             .get("/api/odata/post?$count=true&$top=10")
             .expect(200);
 
-        expect(response.body).toHaveProperty('@odata.count');
+        expect(response.body['@odata.count']).toBeDefined();
         expect(typeof response.body['@odata.count']).toBe('number');
         expect(response.body['@odata.count']).toBeGreaterThan(0);
     });
@@ -504,7 +504,7 @@ describe("OData V4 - $count Tests", () => {
             .get("/api/odata/post?$count=true&$filter=userId eq 1&$top=5")
             .expect(200);
 
-        expect(response.body).toHaveProperty('@odata.count');
+        expect(response.body['@odata.count']).toBeDefined();
         expect(response.body['@odata.count']).toBeGreaterThan(0);
     });
 
@@ -513,7 +513,7 @@ describe("OData V4 - $count Tests", () => {
             .get("/api/odata/post?$count=true&$top=5")
             .expect(200);
 
-        expect(response.body).toHaveProperty('@odata.count');
+        expect(response.body['@odata.count']).toBeDefined();
         // Count should be the total, not just the page size
         expect(response.body['@odata.count']).toBeGreaterThan(5);
     });
@@ -649,7 +649,7 @@ describe("OData V4 - Complex Combination Tests", () => {
             .expect(200);
 
         expect(response.body.value).toBeArray();
-        expect(response.body).toHaveProperty('@odata.count');
+        expect(response.body['@odata.count']).toBeDefined();
 
         if (response.body.value.length > 0) {
             const firstPost = response.body.value[0];

@@ -1,6 +1,6 @@
-import { describe, expect, test, mock } from "bun:test";
-import { parseODataRequest, ODataV4ToSurrealQL, RunODataV4SelectFilter } from "../express/odata-middleware";
+import { describe, expect, mock, test } from "bun:test";
 import { Surreal } from "surrealdb";
+import { ODataV4ToSurrealQL, parseODataRequest, RunODataV4SelectFilter } from "../express/odata-middleware";
 
 describe("OData Middleware", () => {
     describe("parseODataRequest", () => {
@@ -63,8 +63,8 @@ describe("OData Middleware", () => {
         test("generates basic query", () => {
             const result = ODataV4ToSurrealQL("users", "/users?$select=id,name&$filter=active eq true");
 
-            expect(result.entriesQuery).toContain("type::field($select");
-            expect(result.entriesQuery).toContain("type::table($table)");
+            expect(result.entriesQuery.toString()).toContain("type::field($select");
+            expect(result.entriesQuery.toString()).toContain("type::table($table)");
 
             const vals = Object.values(result.parameters);
             expect(result.parameters["$table"]).toBe("users");
@@ -79,22 +79,22 @@ describe("OData Middleware", () => {
             const parsed = parseODataRequest("/users?$top=5");
             const result = ODataV4ToSurrealQL("users", parsed);
 
-            expect(result.entriesQuery).toContain("LIMIT 5");
+            expect(result.entriesQuery.toString()).toContain("LIMIT 5");
             expect(result.limit).toBe(5);
         });
 
         test("handles expansion", () => {
             const result = ODataV4ToSurrealQL("posts", "/posts?$expand=author");
             // Check that it selects the expanded field
-            expect(result.entriesQuery).toContain("author.*");
+            expect(result.entriesQuery.toString()).toContain("author.*");
             // We do NOT expect FETCH unless explicitly requested or implemented
         });
 
         test("handles fetch parameter", () => {
             const result = ODataV4ToSurrealQL("posts", "/posts", ["comments"]);
             // Expect parameterized FETCH
-            expect(result.entriesQuery).toContain("FETCH");
-            expect(result.entriesQuery).toContain("$fetch");
+            expect(result.entriesQuery.toString()).toContain("FETCH");
+            expect(result.entriesQuery.toString()).toContain("$fetch");
 
             expect(Object.values(result.parameters)).toContain("comments");
         });
@@ -107,7 +107,7 @@ describe("OData Middleware", () => {
             const queryMock = mock(() => {
                 return {
                     collect: async () => [[{ count: 0 }], []]
-                }
+                };
             });
             mockDb.query = queryMock as any;
 
@@ -117,7 +117,7 @@ describe("OData Middleware", () => {
             const calls = queryMock.mock.calls as any[];
             const queries = calls.map(c => c[0]);
 
-            expect(queries.some(q => q.includes("LIMIT 10"))).toBe(true);
+            expect(queries.some(q => q.toString().includes("LIMIT 10"))).toBe(true);
         });
 
         test("calculates nextLink", async () => {
@@ -131,10 +131,10 @@ describe("OData Middleware", () => {
                             return [Array(10).fill({ id: 1 })]; // data
                         }
                     }
-                }
+                };
             }) as any;
 
-            const result = await RunODataV4SelectFilter(mockDb, "users", "/users?$top=10&$skip=0");
+            const result = await RunODataV4SelectFilter(mockDb, "users", "/users?$top=10&$skip=0&$count=true");
 
             expect(result['@odata.count']).toBe(20);
             const decodedNextLink = decodeURIComponent(result['@odata.nextlink']!);
@@ -146,7 +146,7 @@ describe("OData Middleware", () => {
             const queryMock = mock(() => {
                 return {
                     collect: async () => [[{ count: 0 }], []]
-                }
+                };
             });
             mockDb.query = queryMock as any;
 
@@ -155,7 +155,7 @@ describe("OData Middleware", () => {
 
             const calls = queryMock.mock.calls as any[];
             const queries = calls.map(c => c[0]);
-            expect(queries.some(q => q.includes("$field"))).toBe(true);
+            expect(queries.some(q => q.toString().includes("$field"))).toBe(true);
         });
     });
 

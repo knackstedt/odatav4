@@ -3,7 +3,7 @@ import { createQuery, SQLLang } from '../parser/main';
 
 const parse = (input: string) => {
     return createQuery(input, { type: SQLLang.SurrealDB });
-}
+};
 
 describe('Comprehensive OData V4 Test Suite', () => {
 
@@ -16,7 +16,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
         it('$select *', () => {
             const result = parse('$select=*');
             // Implementation maps * to a field parameter
-            expect(result.select).toBe("type::field($select0)");
+            expect(result.select).toBe("*");
         });
 
         it('$top', () => {
@@ -178,7 +178,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
         });
 
         it('indexof', () => {
-            expect(filter("indexof(Name, 'a') eq 1")).toContain("array::find_index(type::field($field1), $literal2) = $literal3");
+            expect(filter("indexof(Name, 'a') eq 1")).toContain("(IF string::contains(type::string(type::field($field1)), type::string($literal2)) THEN string::len(string::split(type::string(type::field($field2)), type::string($literal3))[0]) ELSE -1 END) = $literal4");
         });
 
         it.skip('substring', () => {

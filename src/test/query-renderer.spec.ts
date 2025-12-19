@@ -7,7 +7,7 @@ describe("renderQuery", () => {
         const query: ParsedQuery = {};
         const result = renderQuery(query, "mytable");
 
-        expect(result.entriesQuery).toBe("SELECT * FROM type::table($table)");
+        expect(result.entriesQuery.toString()).toBe("SELECT * FROM type::table($table)");
         expect(result.parameters["$table"]).toBe("mytable");
     });
 
@@ -15,28 +15,28 @@ describe("renderQuery", () => {
         const query: ParsedQuery = { select: "id, name" };
         const result = renderQuery(query, "mytable");
 
-        expect(result.entriesQuery).toBe("SELECT id, name FROM type::table($table)");
+        expect(result.entriesQuery.toString()).toBe("SELECT id, name FROM type::table($table)");
     });
 
     test("generates query with $filter", () => {
         const query: ParsedQuery = { where: "age > 18" };
         const result = renderQuery(query, "mytable");
 
-        expect(result.entriesQuery).toBe("SELECT * FROM type::table($table) WHERE age > 18");
+        expect(result.entriesQuery.toString()).toBe("SELECT * FROM type::table($table) WHERE age > 18");
     });
 
     test("generates query with $orderby", () => {
         const query: ParsedQuery = { orderby: "name ASC" };
         const result = renderQuery(query, "mytable");
 
-        expect(result.entriesQuery).toBe("SELECT * FROM type::table($table) ORDER BY name ASC");
+        expect(result.entriesQuery.toString()).toBe("SELECT * FROM type::table($table) ORDER BY name ASC");
     });
 
     test("generates query with $groupby", () => {
         const query: ParsedQuery = { groupby: "`category`" };
         const result = renderQuery(query, "products");
 
-        expect(result.entriesQuery).toBe("SELECT * FROM type::table($table) GROUP BY `category`");
+        expect(result.entriesQuery.toString()).toBe("SELECT * FROM type::table($table) GROUP BY `category`");
     });
 
     test("generates query with $groupby and $orderby", () => {
@@ -46,15 +46,15 @@ describe("renderQuery", () => {
         };
         const result = renderQuery(query, "sales");
 
-        expect(result.entriesQuery).toContain("GROUP BY `category`, `region`");
-        expect(result.entriesQuery).toContain("ORDER BY `category` ASC");
+        expect(result.entriesQuery.toString()).toContain("GROUP BY `category`, `region`");
+        expect(result.entriesQuery.toString()).toContain("ORDER BY `category` ASC");
     });
 
     test("generates query with $skip (start)", () => {
         const query: ParsedQuery = { skip: 5 };
         const result = renderQuery(query, "mytable");
 
-        expect(result.entriesQuery).toBe("SELECT * FROM type::table($table) START 5");
+        expect(result.entriesQuery.toString()).toBe("SELECT * FROM type::table($table) START 5");
         expect(result.skip).toBe(5);
     });
 
@@ -70,7 +70,7 @@ describe("renderQuery", () => {
 
         // Order: SELECT ... FROM ... WHERE ... ORDER BY ... LIMIT ... START ...
         const expected = "SELECT id FROM type::table($table) WHERE active = true ORDER BY created_at DESC LIMIT 20 START 10";
-        expect(result.entriesQuery).toBe(expected);
+        expect(result.entriesQuery.toString()).toBe(expected);
     });
 
     test("generates query with fetch parameter", () => {
@@ -79,7 +79,7 @@ describe("renderQuery", () => {
         const result = renderQuery(query, "posts", fetch);
 
         // Fetch adds FETCH clause at the end
-        expect(result.entriesQuery).toContain("SELECT * FROM type::table($table) FETCH type::field($fetch0), type::field($fetch1)");
+        expect(result.entriesQuery.toString()).toContain("SELECT * FROM type::table($table) FETCH type::field($fetch0), type::field($fetch1)");
         expect(result.parameters["$fetch0"]).toBe("author");
         expect(result.parameters["$fetch1"]).toBe("comments");
     });
@@ -88,7 +88,7 @@ describe("renderQuery", () => {
         const query: ParsedQuery = { where: "score > 50" };
         const result = renderQuery(query, "scores");
 
-        expect(result.countQuery).toBe("SELECT count() FROM type::table($table) WHERE score > 50 GROUP ALL");
+        expect(result.countQuery.toString()).toBe("SELECT count() FROM type::table($table) WHERE score > 50 GROUP ALL");
     });
 
     test("handles $expand", () => {
@@ -105,7 +105,7 @@ describe("renderQuery", () => {
         const result = renderQuery(query, "users");
 
         // Logic appends expand path to select
-        expect(result.entriesQuery).toContain("profile.*");
+        expect(result.entriesQuery.toString()).toContain("profile.*");
     });
 
     test("handles parameters", () => {
@@ -123,6 +123,6 @@ describe("renderQuery", () => {
         const query: ParsedQuery = { select: "id, title" };
         const result = renderQuery(query, "posts", ["author"]);
 
-        expect(result.entriesQuery).toContain("SELECT id, title FROM type::table($table) FETCH type::field($fetch0)");
+        expect(result.entriesQuery.toString()).toContain("SELECT id, title FROM type::table($table) FETCH type::field($fetch0)");
     });
 });
