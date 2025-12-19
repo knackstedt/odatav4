@@ -153,7 +153,7 @@ export type ODataExpressConfig = {
     /**
      * The tables to create endpoints for.
      */
-    tables: ODataExpressTable<any>[]
+    tables: ODataExpressTable<any>[];
 
     /**
      * Method to generate IDs for new records if no ID is provided.
@@ -197,6 +197,7 @@ export interface ParsedQuery {
     select?: string;
     where?: string;
     orderby?: string;
+    groupby?: string;
     limit?: number;
     skip?: number;
     includes?: Visitor[];

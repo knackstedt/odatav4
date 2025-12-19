@@ -32,12 +32,31 @@ describe("renderQuery", () => {
         expect(result.entriesQuery).toBe("SELECT * FROM type::table($table) ORDER BY name ASC");
     });
 
-    test("generates query with $top (limit)", () => {
-        const query: ParsedQuery = { limit: 10 };
-        const result = renderQuery(query, "mytable");
+    test("generates query with $groupby", () => {
+        const query: ParsedQuery = { groupby: "`category`" };
+        const result = renderQuery(query, "products");
 
-        expect(result.entriesQuery).toBe("SELECT * FROM type::table($table) LIMIT 10");
-        expect(result.limit).toBe(10);
+        expect(result.entriesQuery).toBe("SELECT * FROM type::table($table) GROUP BY `category`");
+    });
+
+    test("generates query with $groupby and $orderby", () => {
+        const query: ParsedQuery = {
+            groupby: "`category`, `region`",
+            orderby: "`category` ASC"
+        };
+        const result = renderQuery(query, "sales");
+
+        expect(result.entriesQuery).toContain("GROUP BY `category`, `region`");
+        expect(result.entriesQuery).toContain("ORDER BY `category` ASC");
+    });
+
+    test("count query includes GROUP BY", () => {
+        const query: ParsedQuery = { groupby: "`status`", where: "active = true" };
+        const result = renderQuery(query, "orders");
+
+        expect(result.countQuery).toContain("WHERE active = true");
+        expect(result.countQuery).toContain("GROUP BY `status`");
+        expect(result.countQuery).toContain("GROUP ALL");
     });
 
     test("generates query with $skip (start)", () => {

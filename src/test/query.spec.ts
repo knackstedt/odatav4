@@ -3,7 +3,7 @@ import { createQuery, SQLLang } from '../parser/main';
 
 const parse = (input: string) => {
     return createQuery(input, { type: SQLLang.SurrealDB });
-}
+};
 
 describe('Query string processing', () => {
     it('filter', () => {
@@ -33,6 +33,24 @@ describe('Query string processing', () => {
     it('orderby', () => {
         const result = parse('$orderby=id,label');
         expect(result.orderby).toContain('`id` ASC, `label` ASC');
+    });
+    it('groupby - single field', () => {
+        const result = parse('$groupby=category');
+        expect(result.groupby).toContain('`category`');
+    });
+    it('groupby - multiple fields', () => {
+        const result = parse('$groupby=category,region');
+        expect(result.groupby).toContain('`category`, `region`');
+    });
+    it('groupby with filter', () => {
+        const result = parse('$filter=active eq true&$groupby=category');
+        expect(result.where).toContain('type::field($field1) = $literal1');
+        expect(result.groupby).toContain('`category`');
+    });
+    it('groupby with orderby', () => {
+        const result = parse('$groupby=category&$orderby=category asc');
+        expect(result.groupby).toContain('`category`');
+        expect(result.orderby).toContain('`category` ASC');
     });
     it('format', () => {
         const result = parse('$format=atom');

@@ -38,6 +38,7 @@ export class Visitor {
     select = "";
     where = "";
     orderby = "";
+    groupby = "";
     skip: number;
     limit: number;
     inlinecount: boolean;
@@ -93,7 +94,7 @@ export class Visitor {
             case SQLLang.PostgreSql:
             case SQLLang.ANSI:
             default:
-                `SELECT ${this.select} FROM [${table}] WHERE ${this.where} ORDER BY ${this.orderby}`
+                `SELECT ${this.select} FROM [${table}] WHERE ${this.where} ORDER BY ${this.orderby}`;
         }
     }
 
@@ -200,6 +201,7 @@ export class Visitor {
             this.select ||= `*`;
             this.where ||= "1 = 1";
             this.orderby ||= "1";
+            this.groupby ||= "";
         }
         return this;
     }
@@ -292,6 +294,24 @@ export class Visitor {
         this.limit = +node.value.raw;
     }
 
+    protected VisitGroupBy(node: Lexer.Token, context: any) {
+        context.target = "groupby";
+        node.value.items.forEach((item, i) => {
+            this.Visit(item, context);
+            if (i < node.value.items.length - 1) this.groupby += ", ";
+        });
+    }
+
+    protected VisitGroupByItem(node: Lexer.Token, context: any) {
+        // For SurrealDB, use backticks like orderby
+        if (this.type == SQLLang.SurrealDB) {
+            this.groupby += '`' + node.value.expr.raw.replace(/`/g, '\\`') + '`';
+        }
+        else {
+            this.groupby += `[${node.value.expr.raw}]`;
+        }
+    }
+
     protected VisitSelect(node: Lexer.Token, context: any) {
         context.target = "select";
         node.value.items.forEach((item, i) => {
@@ -345,7 +365,7 @@ export class Visitor {
     protected VisitNotExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (this.type == SQLLang.SurrealDB) {
-            this[target] += "!("
+            this[target] += "!(";
             this.Visit(node.value, context);
             this[target] += ")";
         }
@@ -772,7 +792,7 @@ export class Visitor {
                 break;
             case "ceiling":
                 if (this.type == SQLLang.SurrealDB) {
-                    this[target] += `math::ceil(`
+                    this[target] += `math::ceil(`;
                     this.Visit(params[0], context);
                     this[target] += ")";
                 }

@@ -6,6 +6,7 @@ export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as str
         where,
         select,
         orderby,
+        groupby,
         limit,
         skip,
         parameters,
@@ -37,7 +38,7 @@ export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as str
 
             doExpand(include, path + '.');
         }
-    }
+    };
     // We need to handle the root includes if they exist
     if (includes) {
         // Construct a dummy visitor to reuse doExpand if possible, or just iterate
@@ -77,6 +78,7 @@ export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as str
     let entriesQuery = [
         `SELECT ${select} FROM type::table($table)`,
         `${where ? `WHERE ${where}` : ''}`,
+        `${groupby ? `GROUP BY ${groupby}` : ''}`,
         (typeof orderby == "string" && orderby != '1') ? `ORDER BY ${orderby}` : '',
         typeof limit == "number" ? `LIMIT ${limit}` : '',
         typeof skip == "number" ? `START ${skip}` : '',

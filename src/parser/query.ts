@@ -40,6 +40,7 @@ export namespace Query {
             Query.id(value, index) ||
             Query.inlinecount(value, index) ||
             Query.orderby(value, index) ||
+            Query.groupby(value, index) ||
             Query.search(value, index) ||
             Query.select(value, index) ||
             Query.skip(value, index) ||
@@ -602,6 +603,52 @@ export namespace Query {
         }
 
         return Lexer.tokenize(value, start, index, { expr, direction }, Lexer.TokenType.OrderByItem);
+    }
+
+    export function groupby(value: Utils.SourceArray, index: number): Lexer.Token {
+        let start = index;
+        if (Utils.equals(value, index, "%24groupby")) {
+            index += 10;
+        }
+        else
+            if (Utils.equals(value, index, "$groupby")) {
+                index += 8;
+            }
+            else return;
+
+        let eq = Lexer.EQ(value, index);
+        if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $groupby", value, index });
+        index = eq;
+
+        let items = [];
+        let token = Query.groupbyItem(value, index);
+        if (!token) throw new ODataV4ParseError({ msg: "Expected $groupby item", value, index });
+        index = token.next;
+
+        while (token) {
+            items.push(token);
+
+            let comma = Lexer.COMMA(value, index);
+            if (comma) {
+                index = comma;
+                index = Lexer.SKIPWHITESPACE(value, index);
+                token = Query.groupbyItem(value, index);
+                if (!token) throw new ODataV4ParseError({ msg: "Expected $groupby item after ','", value, index });
+                index = token.next;
+            }
+            else break;
+        }
+
+        return Lexer.tokenize(value, start, index, { items }, Lexer.TokenType.GroupBy);
+    }
+
+    export function groupbyItem(value: Utils.SourceArray, index: number): Lexer.Token {
+        let expr = Expressions.commonExpr(value, index);
+        if (!expr) return;
+        let start = index;
+        index = expr.next;
+
+        return Lexer.tokenize(value, start, index, { expr }, Lexer.TokenType.GroupByItem);
     }
 
     export function skip(value: Utils.SourceArray, index: number): Lexer.Token {

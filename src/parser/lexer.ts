@@ -122,6 +122,8 @@ enum tokenTypes {
     Filter = "Filter",
     OrderBy = "OrderBy",
     OrderByItem = "OrderByItem",
+    GroupBy = "GroupBy",
+    GroupByItem = "GroupByItem",
     Skip = "Skip",
     Top = "Top",
     Format = "Format",
@@ -229,8 +231,8 @@ export namespace Lexer {
     // core definitions
     export function ALPHA(value: number): boolean {
         return (value >= 0x41 && value <= 0x5a) ||
-               (value >= 0x61 && value <= 0x7a) ||
-               value >= 0x80;
+            (value >= 0x61 && value <= 0x7a) ||
+            value >= 0x80;
     }
     export function DIGIT(value: number): boolean {
         return (value >= 0x30 && value <= 0x39);
