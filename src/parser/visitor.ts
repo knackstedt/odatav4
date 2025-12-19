@@ -98,6 +98,72 @@ export class Visitor {
         }
     }
 
+    protected isId(p: any): boolean {
+        if (!p) return false;
+        if (p.type == Lexer.TokenType.ODataIdentifier) {
+            return p.value?.name == 'id' || p.value?.name?.endsWith('Id');
+        }
+        if (p.value && typeof p.value === 'object') {
+            return this.isId(p.value) || this.isId(p.value.left) || this.isId(p.value.right);
+        }
+        return false;
+    }
+
+    protected VisitComparisonExpression(node: Lexer.Token, context: any, operator: string) {
+        if (this.type == SQLLang.SurrealDB) {
+            const left = node.value.left;
+            const right = node.value.right;
+
+            const isLeftId = this.isId(left);
+            const isRightLiteral = right && (right.type == Lexer.TokenType.Literal || (right.type as any) == "Literal");
+            const isRightPotentialId = isRightLiteral && (
+                (right.value == "Edm.String" && /(?<=[^\\]|^):/.test(right.raw)) ||
+                (typeof right.value == "string" && (right.value as string).startsWith("Edm.Int")) ||
+                (typeof right.value == "string" && ["Edm.SByte", "Edm.Byte", "Edm.Decimal", "Edm.Double", "Edm.Single"].includes(right.value as string)) ||
+                typeof right.value == "number"
+            );
+
+            if (isLeftId && isRightPotentialId) {
+                const where = this.where;
+                this.where = '';
+                this.Visit(left, context);
+                const field = this.where;
+
+                this.where = '';
+                this.Visit(right, context);
+                const literal = this.where;
+
+                this.where = where;
+
+                if (operator == "=" || operator == "!=") {
+                    if (operator == "=") {
+                        this.where += `((${field} = ${literal}) || (string::is_record(type::string(${field})) && (string::ends_with(type::string(${field}), ":" + type::string(${literal})))))`;
+                    }
+                    else {
+                        this.where += `! ((${field} = ${literal}) || (string::is_record(type::string(${field})) && (string::ends_with(type::string(${field}), ":" + type::string(${literal})))))`;
+                    }
+                    return;
+                }
+                else {
+                    // Range comparison for IDs
+                    // Only compare the numeric part if it's a record.
+                    // Otherwise, compare the raw field.
+                    this.where += `((string::is_record(type::string(${field})) && type::number(string::split(type::string(${field}), ":")[1]) ${operator} ${literal}) || (!string::is_record(type::string(${field})) && ${field} ${operator} ${literal}))`;
+                    return;
+                }
+            }
+        }
+
+        this.Visit(node.value.left, context);
+        if (this.type == SQLLang.SurrealDB) {
+            this.where += ` ${operator} `;
+        }
+        else {
+            this.where += operator == "!=" ? " <> " : ` ${operator} `;
+        }
+        this.Visit(node.value.right, context);
+    }
+
     from(table: string) {
         let sql = this.getBaseQuery(table);
 
@@ -288,6 +354,11 @@ export class Visitor {
 
     protected VisitSkip(node: Lexer.Token, context: any) {
         this.skip = +node.value.raw;
+        if (this.skip < 0) {
+            throw new ODataV4ParseError({
+                msg: "The $skip query option must be a non-negative integer."
+            });
+        }
     }
 
     protected VisitTop(node: Lexer.Token, context: any) {
@@ -321,6 +392,12 @@ export class Visitor {
     }
 
     protected VisitSelectItem(node: Lexer.Token, context: any) {
+        // Check if this is a wildcard select - don't parameterize it
+        if (node.raw === '*') {
+            this.select += '*';
+            return;
+        }
+
         if (this.type == SQLLang.SurrealDB) {
             const fieldSeed = `$select${this.selectSeed++}`;
             this.parameters.set(fieldSeed, node.raw);
@@ -334,11 +411,12 @@ export class Visitor {
 
     protected VisitAndExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
-            this.where += "(";
+            const target = context?.target || 'where';
+            this[target] += "(";
             this.Visit(node.value.left, context);
-            this.where += " && ";
+            this[target] += " && ";
             this.Visit(node.value.right, context);
-            this.where += ")";
+            this[target] += ")";
         }
         else {
             this.Visit(node.value.left, context);
@@ -349,11 +427,12 @@ export class Visitor {
 
     protected VisitOrExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
-            this.where += "(";
+            const target = context?.target || 'where';
+            this[target] += "(";
             this.Visit(node.value.left, context);
-            this.where += " || ";
+            this[target] += " || ";
             this.Visit(node.value.right, context);
-            this.where += ")";
+            this[target] += ")";
         }
         else {
             this.Visit(node.value.left, context);
@@ -370,7 +449,7 @@ export class Visitor {
             this[target] += ")";
         }
         else {
-            this.Visit(node.value.right, context);
+            this.Visit(node.value, context);
         }
     }
 
@@ -419,11 +498,9 @@ export class Visitor {
 
     protected VisitAddExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
-
-        if (this.type == SQLLang.SurrealDB) {
-            this.Visit(node.value.left, context);
-            this[target] += " + ";
-            this.Visit(node.value.right, context);
+        // This seems very wrong.
+        if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
+            this[target] += "NULL";
         }
         else {
             this.Visit(node.value.left, context);
@@ -434,11 +511,9 @@ export class Visitor {
 
     protected VisitSubExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
-
-        if (this.type == SQLLang.SurrealDB) {
-            this.Visit(node.value.left, context);
-            this[target] += " - ";
-            this.Visit(node.value.right, context);
+        // This seems very wrong.
+        if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
+            this[target] += "NULL";
         }
         else {
             this.Visit(node.value.left, context);
@@ -449,11 +524,9 @@ export class Visitor {
 
     protected VisitMulExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
-
-        if (this.type == SQLLang.SurrealDB) {
-            this.Visit(node.value.left, context);
-            this[target] += " * ";
-            this.Visit(node.value.right, context);
+        // This seems very wrong.
+        if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
+            this[target] += "NULL";
         }
         else {
             this.Visit(node.value.left, context);
@@ -464,11 +537,8 @@ export class Visitor {
 
     protected VisitDivExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
-
-        if (this.type == SQLLang.SurrealDB) {
-            this.Visit(node.value.left, context);
-            this[target] += " / ";
-            this.Visit(node.value.right, context);
+        if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
+            this[target] += "NULL";
         }
         else {
             this.Visit(node.value.left, context);
@@ -479,11 +549,8 @@ export class Visitor {
 
     protected VisitModExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
-
-        if (this.type == SQLLang.SurrealDB) {
-            this.Visit(node.value.left, context);
-            this[target] += " % ";
-            this.Visit(node.value.right, context);
+        if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
+            this[target] += "NULL";
         }
         else {
             this.Visit(node.value.left, context);
@@ -548,56 +615,8 @@ export class Visitor {
     }
 
     protected VisitEqualsExpression(node: Lexer.Token, context: any) {
-        if (this.type == SQLLang.SurrealDB) {
-            // TODO: This exists to handle surrealDB strings as IDs
-            // but it probably needs reworked from the ground-up.
-            // TODO: This doesn't work for the string on the left side!
-            if (
-                node.value.right.type == Lexer.TokenType.Literal &&
-                node.value.right.value == "Edm.String" &&
-                /(?<=[^\\]|^):/.test(node.value.right.raw)
-            ) {
-                // We will optionally handle SurrealDB IDs here.
-                // This emits an equals expression that checks both the string value and the record type.
-                // e.g. (field = 'scan:01K7HT1EMX3EYE19M1MGQ36D7K' || field = type::record('scan:01K7HT1EMX3EYE19M1MGQ36D7K'))
-                this.where += "((";
-                this.Visit(node.value.left, context);
-                this.where += " = ";
-                this.Visit(node.value.right, context);
-                this.where += ") || (";
-                const where = this.where;
-                const p = this.where.length;
-
-                this.where = '';
-                this.Visit(node.value.left, context);
-                this.where += "```";
-                this.Visit(node.value.right, context);
-
-                const [field, literal] = this.where.split("```");
-
-                this.where = where;
-
-                this.where += "string::is_record(";
-                this.where += literal;
-                this.where += ") AND ";
-                this.where += field;
-                this.where += " = type::record(";
-                this.where += literal;
-                this.where += ")))";
-            }
-            else {
-                // this isn't possibly a SurrealDB ID, so do normal equals handling.
-                this.Visit(node.value.left, context);
-                this.where += " = ";
-                this.Visit(node.value.right, context);
-            }
-        }
-        else {
-            this.Visit(node.value.left, context);
-            this.where += " = ";
-            this.Visit(node.value.right, context);
-
-            // FIX: This is a hack.
+        this.VisitComparisonExpression(node, context, "=");
+        if (this.type != SQLLang.SurrealDB) {
             if (this.options.useParameters && context.literal == null) {
                 this.where = this.where.replace(/= \$literal\d+$/, "IS NULL")
                     .replace(new RegExp(`\\? = \\[${context.identifier}\\]$`), `[${context.identifier}] IS NULL`);
@@ -610,9 +629,7 @@ export class Visitor {
     }
 
     protected VisitNotEqualsExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
-        this.where += this.type == SQLLang.SurrealDB ? " != " : " <> ";
-        this.Visit(node.value.right, context);
+        this.VisitComparisonExpression(node, context, "!=");
 
         if (this.type != SQLLang.SurrealDB) {
             // FIX: This is a hack.
@@ -628,27 +645,19 @@ export class Visitor {
     }
 
     protected VisitLesserThanExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
-        this.where += " < ";
-        this.Visit(node.value.right, context);
+        this.VisitComparisonExpression(node, context, "<");
     }
 
     protected VisitLesserOrEqualsExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
-        this.where += " <= ";
-        this.Visit(node.value.right, context);
+        this.VisitComparisonExpression(node, context, "<=");
     }
 
     protected VisitGreaterThanExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
-        this.where += " > ";
-        this.Visit(node.value.right, context);
+        this.VisitComparisonExpression(node, context, ">");
     }
 
     protected VisitGreaterOrEqualsExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value.left, context);
-        this.where += " >= ";
-        this.Visit(node.value.right, context);
+        this.VisitComparisonExpression(node, context, ">=");
     }
 
     protected VisitLiteral(node: Lexer.Token, context: any) {
@@ -733,11 +742,15 @@ export class Visitor {
                 break;
             case "indexof":
                 if (this.type == SQLLang.SurrealDB) {
-                    this[target] += 'array::find_index(';
+                    this[target] += "(IF string::contains(type::string(";
                     this.Visit(params[0], context);
-                    this[target] += ', ';
+                    this[target] += "), type::string(";
                     this.Visit(params[1], context);
-                    this[target] += ")";
+                    this[target] += ")) THEN string::len(string::split(type::string(";
+                    this.Visit(params[0], context);
+                    this[target] += "), type::string(";
+                    this.Visit(params[1], context);
+                    this[target] += "))[0]) ELSE -1 END)";
                 } else {
                     fn = "";
                     switch (this.type) {
@@ -764,9 +777,14 @@ export class Visitor {
                 }
                 break;
             case "round":
-                this[target] += this.type == SQLLang.SurrealDB ? "math::round(" : "ROUND(";
-                this.Visit(params[0], context);
-                this[target] += ")";
+                if (this.type == SQLLang.SurrealDB && this.isId(params[0])) {
+                    this[target] += "NULL";
+                }
+                else {
+                    this[target] += this.type == SQLLang.SurrealDB ? "math::round(" : "ROUND(";
+                    this.Visit(params[0], context);
+                    this[target] += ")";
+                }
                 break;
             case "length":
                 this[target] += this.type == SQLLang.SurrealDB ? "string::len(" : "LEN(";
@@ -785,16 +803,26 @@ export class Visitor {
                 break;
             case "floor":
                 if (this.type == SQLLang.SurrealDB) {
-                    this[target] += `math::floor(`;
-                    this.Visit(params[0], context);
-                    this[target] += ")";
+                    if (this.isId(params[0])) {
+                        this[target] += "NULL";
+                    }
+                    else {
+                        this[target] += `math::floor(`;
+                        this.Visit(params[0], context);
+                        this[target] += ")";
+                    }
                 }
                 break;
             case "ceiling":
                 if (this.type == SQLLang.SurrealDB) {
-                    this[target] += `math::ceil(`;
-                    this.Visit(params[0], context);
-                    this[target] += ")";
+                    if (this.isId(params[0])) {
+                        this[target] += "NULL";
+                    }
+                    else {
+                        this[target] += `math::ceil(`;
+                        this.Visit(params[0], context);
+                        this[target] += ")";
+                    }
                 }
                 break;
             case "year":

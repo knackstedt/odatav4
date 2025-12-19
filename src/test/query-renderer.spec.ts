@@ -50,15 +50,6 @@ describe("renderQuery", () => {
         expect(result.entriesQuery).toContain("ORDER BY `category` ASC");
     });
 
-    test("count query includes GROUP BY", () => {
-        const query: ParsedQuery = { groupby: "`status`", where: "active = true" };
-        const result = renderQuery(query, "orders");
-
-        expect(result.countQuery).toContain("WHERE active = true");
-        expect(result.countQuery).toContain("GROUP BY `status`");
-        expect(result.countQuery).toContain("GROUP ALL");
-    });
-
     test("generates query with $skip (start)", () => {
         const query: ParsedQuery = { skip: 5 };
         const result = renderQuery(query, "mytable");

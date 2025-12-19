@@ -99,7 +99,7 @@ export namespace Expressions {
         let rws = Lexer.SKIPWHITESPACE(value, index);
         if (
             rws === index ||
-            !Utils.stringify(value, rws, rws+3).toLowerCase().startsWith("and")
+            !Utils.stringify(value, rws, rws + 3).toLowerCase().startsWith("and")
         ) return;
         let start = index;
         index = rws + 3;
@@ -220,7 +220,8 @@ export namespace Expressions {
         let start = index;
         index += 3;
         let rws = Lexer.SKIPWHITESPACE(value, index);
-        if (rws === index) return;
+        // OData V4 says RWS is required, but many consumers use not(...)
+        if (rws === index && value[index] !== 0x28) return;
         index = rws;
         let token = boolCommonExpr(value, index);
         if (!token) return;

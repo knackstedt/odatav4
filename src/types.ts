@@ -1,6 +1,5 @@
 import * as express from 'express';
 import type { Surreal } from 'surrealdb';
-import { SqlOptions } from './parser/main';
 import { Visitor } from './parser/visitor';
 
 export type ODataExpressHooks<T = Record<any, any>> = {
@@ -205,7 +204,6 @@ export interface ParsedQuery {
     count?: boolean;
     skipToken?: string;
     search?: string;
-    options?: SqlOptions;
     parameters?: Map<string, any>;
 }
 
