@@ -70,13 +70,13 @@ GET /users?$filter=age gt 18 and role eq 'admin'&$select=name,email&$orderby=nam
 This library generates **extremely secure** SurQL queries using parameterized statements:
 
 ```typescript
-// OData Query: $filter=name eq 'John'&$select=id,name&$orderby=id&$groupby=id
+// OData Query: $filter=name eq 'John'&$select=id,name&$orderby=id&$groupby=department
 
 // ❌ Other libraries (vulnerable):
-// SELECT id, name FROM users WHERE name = 'John' ORDER BY id ASC
+// SELECT id, name FROM users WHERE name = 'John' GROUP BY department ORDER BY id ASC
 
 // ✅ This library (secure):
-// SELECT type::field($select0), type::field($select1) FROM type::table($table) WHERE type::field($field1) = $literal1 ORDER BY `id` ASC
+// SELECT type::field($select0), type::field($select1) FROM type::table($table) WHERE type::field($field1) = $literal1 GROUP BY `department` ORDER BY `id` ASC
 // Parameters: { $table: "users", $field1: "name", $literal1: "John", $select0: "id", $select1: "name" }
 ```
 
@@ -126,14 +126,14 @@ console.log(result.parameters);
 | `$select` | ✅ | Choose specific fields to return |
 | `$groupby` | ✅ | Group results by one or more fields |
 | `$orderby` | ✅ | Sort results by one or more fields |
-| `$top` | ✅ | Limit number of results (pagination) |
-| `$skip` | ✅ | Skip N results (pagination) |
+| `$top` | ✅ | Limit number of results (pagination) - configurable max via `maxPageSize` |
+| `$skip` | ✅ | Skip N results (pagination) - configurable max via `maxSkip` |
 | `$count` | ✅ | Include total count in response |
-| `$format` | WIP ⚠️ | Specify response format (json, xml, atom) |
-| `$skiptoken` | WIP ⚠️ | Server-driven pagination token |
+| `$format` | ⚠️ | Specify response format (json, xml, atom) - partial support |
+| `$skiptoken` | ⚠️ | Server-driven pagination token - partial support |
 | `$id` | ✅ | Fetch specific record by ID |
-| `$search` | WIP ⚠️ | Full-text search (partial support) |
-| `$expand` | WIP 🔄 | Expand related entities (in development) |
+| `$search` | ⚠️ | Full-text search (partial support, enable via `enableSearch` option) |
+| `$expand` | 🔄 | Expand related entities - configurable limits via `maxExpandDepth` and `maxExpandCount` |
 
 ### Supported Filter Operations
 
@@ -259,18 +259,25 @@ TODO!
 Perfect for: SaaS platforms, white-label solutions, B2B applications
 
 ```typescript
-
 import { GetTenant } from "./utils/tenant";
 
 const multiTenantAPI = SurrealODataV4Middleware({
   tables: [
     new ODataExpressTable({
       table: "customers",
+      
+      // Automatically filter by tenant using row-level security
+      rowLevelFilter: (req) => `tenantId = '${req.tenant.id}'`,
+      
+      // Additional validation hook if needed
       beforeRecordGet: async (req) => {
-        // Automatically filter by tenant
-        req.query.$filter = req.query.$filter 
-          ? `(${req.query.$filter}) and tenantId eq '${req.tenant.id}'`
-          : `tenantId eq '${req.tenant.id}'`;
+        console.log(`Tenant ${req.tenant.id} accessing customers`);
+      },
+      
+      beforeRecordPost: async (req, customer) => {
+        // Ensure tenantId is set on creation
+        customer.tenantId = req.tenant.id;
+        return customer;
       }
     })
   ],
@@ -286,6 +293,8 @@ const multiTenantAPI = SurrealODataV4Middleware({
   })
 });
 ```
+
+> **Note**: The `rowLevelFilter` is automatically AND'd with user queries, ensuring perfect tenant isolation without manual filtering in every hook. Alternatively you could provide a `partial` and `parameters` object to the `rowLevelFilter` function to inject variables into the query. Other tenancy approaches such as a database per tenant can be implemented by using the `resolveDb` function.
 
 ### 5. Data Export and Reporting
 
@@ -345,8 +354,11 @@ const middleware = SurrealODataV4Middleware({
     $timestamp: new Date().toISOString()
   }),
   
-  // Optional: Experimental auto type casting
-  enableAutoTypeCasting: true,
+  // DoS Protection: Limit pagination and expansion
+  maxPageSize: 500,        // Server-driven page size limit (default: 500)
+  maxSkip: 1000000,        // Maximum $skip value (default: 1000000)
+  maxExpandDepth: 5,       // Maximum nested $expand depth (default: 5)
+  maxExpandCount: 10,      // Maximum total expansions (default: 10)
   
   // Table configurations
   tables: [
@@ -368,7 +380,19 @@ const middleware = SurrealODataV4Middleware({
         // Or use shortcuts:
         // write: ["admin"],  // Covers post, put, patch, delete
         // all: ["admin"]     // Covers all operations
+        
+        // Field-level access control: restrict sensitive fields
+        restrictedFields: {
+          internalNotes: ["admin"],       // Only admins can read
+          costPrice: ["admin", "finance"]  // Admins and finance can read
+        }
       },
+      
+      // Row-level security: inject WHERE conditions automatically
+      rowLevelFilter: (req) => `userId = '${req.user.id}'`,
+      
+      // Security: whitelist allowed $orderby fields
+      allowedOrderByFields: ["createdAt", "status", "total"],
       
       // Lifecycle hooks
       beforeRecordGet: async (req) => {
@@ -507,6 +531,22 @@ afterRecord[Post|Patch|Put|Delete] → afterRecordMutate → Response
 ?$orderby=category asc, price desc
 ```
 
+#### $groupby - Group Results
+
+```bash
+# Single field
+?$groupby=category
+
+# Multiple fields
+?$groupby=category,region
+
+# With filter and orderby
+?$filter=status eq 'active'&$groupby=department&$orderby=department asc
+```
+
+> [!NOTE]
+> `$groupby` is a simplified alternative to OData v4's standard `$apply=groupby(...)`. This library implements the direct parameter syntax for easier usage.
+
 #### $top & $skip - Pagination
 
 ```bash
@@ -582,6 +622,93 @@ const query = {
 };
 ```
 
+### DoS Protection
+
+Protect your API from denial-of-service attacks with built-in limits:
+
+```typescript
+SurrealODataV4Middleware({
+  // Prevent excessive data retrieval
+  maxPageSize: 500,        // Server-driven paging limit
+  maxSkip: 1000000,        // Maximum $skip parameter value
+  
+  // Prevent expansion attacks
+  maxExpandDepth: 5,       // Maximum nested $expand depth
+  maxExpandCount: 10,      // Maximum total expanded relations
+  
+  tables: [/* ... */]
+});
+```
+
+**What these limits protect against:**
+- `maxPageSize`: Caps `$top` and sets default page size when no `$top` is specified
+- `maxSkip`: Prevents expensive seek operations on large datasets
+- `maxExpandDepth`: Prevents deeply nested expansions like `$expand=A($expand=B($expand=C(...)))`
+- `maxExpandCount`: Limits total number of relations that can be expanded
+
+### Row-Level Security
+
+Automatically filter data based on user context with `rowLevelFilter`:
+
+```typescript
+new ODataExpressTable({
+  table: "documents",
+  
+  // Automatically inject WHERE clause for all queries
+  rowLevelFilter: (req) => {
+    // For multi-tenant apps
+    return `tenantId = '${req.tenant.id}'`;
+    
+    // Or for user-specific data
+    // return `ownerId = '${req.user.id}'`;
+    
+    // Or combine multiple conditions
+    // return `(ownerId = '${req.user.id}' OR sharedWith CONTAINS '${req.user.id}')`;
+  }
+})
+```
+
+The filter is automatically AND'd with the user's `$filter` query, ensuring users can only access their own data.
+
+### Field-Level Security
+
+Restrict access to sensitive fields with `restrictedFields`:
+
+```typescript
+new ODataExpressTable({
+  table: "users",
+  accessControl: {
+    read: ["user", "admin"],
+    
+    // Field-level restrictions
+    restrictedFields: {
+      password: ["admin"],           // Only admins can read password hashes
+      ssn: ["admin", "hr"],          // Only admin and HR can read SSN
+      salary: ["admin", "finance"]   // Only admin and finance can read salary
+    }
+  }
+})
+```
+
+Fields not listed are accessible to all users with table read permission. Restricted fields are automatically filtered from `$select` queries for unauthorized users.
+
+### Field Enumeration Protection
+
+Prevent field enumeration attacks with `allowedOrderByFields`:
+
+```typescript
+new ODataExpressTable({
+  table: "users",
+  
+  // Only allow ordering by these fields
+  allowedOrderByFields: ["createdAt", "name", "email"],
+  
+  // Attempts to order by other fields (e.g., $orderby=ssn) will be rejected
+})
+```
+
+This prevents attackers from discovering sensitive field names by trying different `$orderby` values.
+
 ### Security Best Practices
 
 1. **Always use role-based access control**
@@ -602,14 +729,22 @@ const query = {
    }
    ```
 
-3. **Filter by user/tenant automatically**
+3. **Use row-level filtering for multi-tenant apps**
    ```typescript
-   beforeRecordGet: async (req) => {
-     req.query.$filter = `userId eq '${req.user.id}'`;
+   rowLevelFilter: (req) => `tenantId = '${req.tenant.id}'`
+   ```
+
+4. **Restrict sensitive fields**
+   ```typescript
+   accessControl: {
+     restrictedFields: {
+       password: ["admin"],
+       creditCard: ["admin", "finance"]
+     }
    }
    ```
 
-4. **Use database-level permissions**
+5. **Use database-level permissions**
    ```typescript
    resolveDb: async (req) => {
      const db = new Surreal();
@@ -635,14 +770,22 @@ import { createQuery, SQLLang } from '@dotglitch/odatav4';
 
 const result = createQuery(
   "$filter=age gt 18&$select=name,email",
-  { type: SQLLang.SurrealDB }
+  { 
+    type: SQLLang.SurrealDB,
+    maxExpandDepth: 5,      // Optional: Limit $expand nesting
+    maxExpandCount: 10,     // Optional: Limit total expansions
+    maxPageSize: 500,       // Optional: Limit $top value
+    maxSkip: 1000000,       // Optional: Limit $skip value
+    maxParameters: 200      // Optional: Limit parameter count
+  }
 );
 
-// Returns: ParsedQuery
+// Returns: Visitor object with:
 {
   select: string;           // Rendered SELECT clause
   where: string;            // Rendered WHERE clause
   orderby: string;          // Rendered ORDER BY clause
+  groupby: string;          // Rendered GROUP BY clause
   limit: number;            // LIMIT value
   skip: number;             // OFFSET value
   count: boolean;           // Whether to include count
@@ -695,11 +838,24 @@ Create Express middleware for OData endpoints.
 import { SurrealODataV4Middleware } from '@dotglitch/odatav4';
 
 const middleware = SurrealODataV4Middleware({
+  // Required: Database resolver
   resolveDb: (req) => req.db,
+  
+  // Required: Table configurations
   tables: [/* ... */],
+
+  // Optional: ID generator
   idGenerator?: (item) => string,
-  variables?: Record | Function,
-  enableAutoTypeCasting?: boolean
+  
+  // Optional: Global query variables
+  variables?: Record<any, any> | Function,
+  
+  
+  // Optional: DoS protection limits
+  maxPageSize?: number,        // Server-driven page size (default: 500)
+  maxSkip?: number,            // Maximum $skip value (default: 1000000)
+  maxExpandDepth?: number,     // Maximum $expand nesting (default: 5)
+  maxExpandCount?: number      // Maximum total expansions (default: 10)
 });
 
 app.use('/api/odata', middleware);
@@ -711,17 +867,37 @@ Define table configuration with type safety.
 
 ```typescript
 new ODataExpressTable<User>({
+  // Required: Table name
   table: string;
+  
+  // Optional: Custom URI segment (defaults to table name)
   uriSegment?: string;
+  
+  // Optional: Auto-fetch relations
   fetch?: string | string[];
+  
+  // Optional: Access control
   accessControl?: {
-    read?: string[];
-    post?: string[];
-    patch?: string[];
-    delete?: string[];
-    write?: string[];
-    all?: string[];
+    read?: string[];           // Roles that can read
+    post?: string[];           // Roles that can create
+    patch?: string[];          // Roles that can update
+    delete?: string[];         // Roles that can delete
+    write?: string[];          // Shorthand for post/patch/delete
+    all?: string[];            // Shorthand for all operations
+    
+    // Field-level access control
+    restrictedFields?: {
+      [fieldName: string]: string[];  // Roles that can read each field
+    };
   };
+  
+  // Optional: Row-level security filter
+  rowLevelFilter?: (req) => string;
+  
+  // Optional: Whitelist for $orderby fields
+  allowedOrderByFields?: string[];
+  
+  // Optional: Metadata for custom use
   tableMetadata?: any;
   
   // Lifecycle hooks
@@ -731,6 +907,8 @@ new ODataExpressTable<User>({
   afterRecordPost?: (req, record) => Promise<T>;
   beforeRecordPatch?: (req, record) => Promise<T>;
   afterRecordPatch?: (req, record) => Promise<T>;
+  beforeRecordPut?: (req, record) => Promise<T>;
+  afterRecordPut?: (req, record) => Promise<T>;
   beforeRecordDelete?: (req, record) => Promise<T>;
   afterRecordDelete?: (req, record) => Promise<T>;
   beforeRecordMutate?: (req, record) => Promise<T>;
