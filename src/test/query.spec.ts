@@ -28,7 +28,7 @@ describe('Query string processing', () => {
     });
     it('select', () => {
         const result = parse('$select=id,label');
-        expect(result.select).toContain('type::field($select0), type::field($select1)');
+        expect(result.select).toContain('type::field($select0) AS `id`, type::field($select1) AS `label`');
     });
     it('orderby', () => {
         const result = parse('$orderby=id,label');
@@ -73,7 +73,7 @@ describe('Query string processing', () => {
         expect(result.limit).toEqual(5);
         expect(result.skip).toEqual(10);
         expect(result.inlinecount).toEqual(true);
-        expect(result.select).toContain('type::field($select0), type::field($select1)');
+        expect(result.select).toContain('type::field($select0) AS `id`, type::field($select1) AS `label`');
     });
 
     it('Multi-prop 2', () => {
@@ -82,7 +82,7 @@ describe('Query string processing', () => {
         expect(result.limit).toEqual(5);
         expect(result.skip).toEqual(10);
         expect(result.inlinecount).toEqual(true);
-        expect(result.select).toContain('type::field($select0), type::field($select1)');
+        expect(result.select).toContain('type::field($select0) AS `id`, type::field($select1) AS `label`');
     });
 
     it('Multi-prop 3', () => {
@@ -91,7 +91,7 @@ describe('Query string processing', () => {
         expect(result.limit).toEqual(5);
         expect(result.skip).toEqual(10);
         expect(result.inlinecount).toEqual(true);
-        expect(result.select).toContain('type::field($select0), type::field($select1)');
+        expect(result.select).toContain('type::field($select0) AS `id`, type::field($select1) AS `label`');
     });
 
     it('Multi-prop 4', () => {
@@ -100,6 +100,6 @@ describe('Query string processing', () => {
         expect(result.limit).toEqual(5);
         expect(result.skip).toEqual(10);
         expect(result.inlinecount).toEqual(true);
-        expect(result.select).toContain('type::field($select0), type::field($select1)');
+        expect(result.select).toContain('type::field($select0) AS `id`, type::field($select1) AS `label`');
     });
 });

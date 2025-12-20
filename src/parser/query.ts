@@ -53,10 +53,12 @@ export namespace Query {
         if (!key) return;
         let start = index;
         index = key.next;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after custom query option key", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         while (value[index] !== 0x26 && index < value.length) index++;
         if (index === eq) throw new ODataV4ParseError({ msg: "Expected value for custom query option", value, index });
@@ -75,9 +77,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $id", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         while (value[index] !== 0x26 && index < value.length) index++;
         if (index === eq) throw new ODataV4ParseError({ msg: "Expected value for $id", value, index });
@@ -96,9 +100,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $expand", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let items = [];
         let token = Query.expandItem(value, index, metadataContext);
@@ -123,6 +129,7 @@ export namespace Query {
 
     export function expandItem(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
         let start = index;
+        index = Lexer.SKIPWHITESPACE(value, index);
         let star = Lexer.STAR(value, index);
         if (star) {
             index = star;
@@ -151,6 +158,7 @@ export namespace Query {
         let path = Query.expandPath(value, index, metadataContext);
         if (!path) throw new ODataV4ParseError({ msg: "Expected expand path", value, index });
         index = path.next;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let tokenValue: any = { path };
 
@@ -162,6 +170,7 @@ export namespace Query {
             let open = Lexer.OPEN(value, index);
             if (open) {
                 index = open;
+                index = Lexer.SKIPWHITESPACE(value, index);
 
                 let option = Query.expandRefOption(value, index);
                 if (!option) throw new ODataV4ParseError({ msg: "Expected expand ref option inside 'ref(...)'", value, index });
@@ -170,10 +179,12 @@ export namespace Query {
                 while (option) {
                     refOptions.push(option);
                     index = option.next;
+                    index = Lexer.SKIPWHITESPACE(value, index);
 
                     let semi = Lexer.SEMI(value, index);
                     if (semi) {
                         index = semi;
+                        index = Lexer.SKIPWHITESPACE(value, index);
 
                         option = Query.expandRefOption(value, index);
                         if (!option) throw new ODataV4ParseError({ msg: "Expected expand ref option after ';'", value, index });
@@ -181,6 +192,7 @@ export namespace Query {
                     else break;
                 }
 
+                index = Lexer.SKIPWHITESPACE(value, index);
                 let close = Lexer.CLOSE(value, index);
                 if (!close) throw new ODataV4ParseError({ msg: "Expected ')' to close $expand ref options", value, index });
                 index = close;
@@ -197,6 +209,7 @@ export namespace Query {
                 let open = Lexer.OPEN(value, index);
                 if (open) {
                     index = open;
+                    index = Lexer.SKIPWHITESPACE(value, index);
 
                     let option = Query.expandCountOption(value, index);
                     if (!option) throw new ODataV4ParseError({ msg: "Expected expand count option inside 'count(...)'", value, index });
@@ -205,10 +218,12 @@ export namespace Query {
                     while (option) {
                         countOptions.push(option);
                         index = option.next;
+                        index = Lexer.SKIPWHITESPACE(value, index);
 
                         let semi = Lexer.SEMI(value, index);
                         if (semi) {
                             index = semi;
+                            index = Lexer.SKIPWHITESPACE(value, index);
 
                             option = Query.expandCountOption(value, index);
                             if (!option) throw new ODataV4ParseError({ msg: "Expected expand count option after ';'", value, index });
@@ -216,6 +231,7 @@ export namespace Query {
                         else break;
                     }
 
+                    index = Lexer.SKIPWHITESPACE(value, index);
                     let close = Lexer.CLOSE(value, index);
                     if (!close) throw new ODataV4ParseError({ msg: "Expected ')' to close $expand count options", value, index });
                     index = close;
@@ -226,6 +242,7 @@ export namespace Query {
                 let open = Lexer.OPEN(value, index);
                 if (open) {
                     index = open;
+                    index = Lexer.SKIPWHITESPACE(value, index);
 
                     let option = Query.expandOption(value, index);
                     if (!option) throw new ODataV4ParseError({ msg: "Expected expand option inside parentheses", value, index });
@@ -234,10 +251,12 @@ export namespace Query {
                     while (option) {
                         options.push(option);
                         index = option.next;
+                        index = Lexer.SKIPWHITESPACE(value, index);
 
                         let semi = Lexer.SEMI(value, index);
                         if (semi) {
                             index = semi;
+                            index = Lexer.SKIPWHITESPACE(value, index);
 
                             option = Query.expandOption(value, index);
                             if (!option) throw new ODataV4ParseError({ msg: "Expected expand option after ';'", value, index });
@@ -245,6 +264,7 @@ export namespace Query {
                         else break;
                     }
 
+                    index = Lexer.SKIPWHITESPACE(value, index);
                     let close = Lexer.CLOSE(value, index);
                     if (!close) throw new ODataV4ParseError({ msg: "Expected ')' to close $expand options", value, index });
                     index = close;
@@ -347,9 +367,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $search", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let expr = Query.searchExpr(value, index);
         if (!expr) throw new ODataV4ParseError({ msg: "Expected search expression", value, index });
@@ -506,9 +528,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $levels", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let level;
         if (Utils.equals(value, index, "max")) {
@@ -536,9 +560,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $filter", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let expr = Expressions.boolCommonExpr(value, index);
         if (!expr) throw new ODataV4ParseError({ msg: "Expected boolean filter expression", value, index });
@@ -558,9 +584,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $orderby", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let items = [];
         let token = Query.orderbyItem(value, index);
@@ -616,9 +644,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $groupby", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let items = [];
         let token = Query.groupbyItem(value, index);
@@ -662,10 +692,12 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         // If '=' does not follow, this may actually be $skiptoken; allow other parsers to match
         if (!eq) return;
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let token = PrimitiveLiteral.int32Value(value, index);
         if (!token) throw new ODataV4ParseError({ msg: "Expected integer for $skip", value, index });
@@ -685,9 +717,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $top", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let token = PrimitiveLiteral.int32Value(value, index);
         if (!token) throw new ODataV4ParseError({ msg: "Expected integer for $top", value, index });
@@ -707,9 +741,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $format", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let format;
         if (Utils.equals(value, index, "atom")) {
@@ -742,9 +778,11 @@ export namespace Query {
             }
             else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $count", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let token = PrimitiveLiteral.booleanValue(value, index);
         if (!token) throw new ODataV4ParseError({ msg: "Expected boolean value for $count", value, index });
@@ -763,9 +801,11 @@ export namespace Query {
         }
         else return;
 
+        index = Lexer.SKIPWHITESPACE(value, index);
         let eq = Lexer.EQ(value, index);
         if (!eq) throw new ODataV4ParseError({ msg: "Expected '=' after $select", value, index });
         index = eq;
+        index = Lexer.SKIPWHITESPACE(value, index);
 
         let items = [];
         let token = Query.selectItem(value, index);

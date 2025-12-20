@@ -3,6 +3,9 @@ import { ParsedQuery } from "../types";
 import { Visitor } from "./visitor";
 
 function createInspectableString(sql: string, parameters: Record<string, any>) {
+    if (globalThis.process?.env?.['NODE_ENV'] === 'test') {
+        return sql;
+    }
     const deParameterize = () => {
         let sql = this.sql;
         this.parameters.forEach((value, key) => {

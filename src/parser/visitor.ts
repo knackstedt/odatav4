@@ -61,12 +61,17 @@ export class Visitor {
         if (this.options.useParameters != false) this.options.useParameters = true;
         this.type = options.type || SQLLang.ANSI;
 
-        // SurrealDB handles p0 unusually, so we start at 1?
         if (this.type == SQLLang.SurrealDB) {
             this.parameterSeed = 1;
             this.fieldSeed = 1;
         }
+
+        // Initialize expand counter if not provided (this logic relies on child visitors sharing the reference manually)
+        this.expandCounter = { count: 0 };
     }
+
+    expandDepth: number = 0;
+    expandCounter: { count: number; };
 
     protected getFetchPaths(includes: Visitor[], parentPath: string = ""): string[] {
         const paths: string[] = [];
@@ -107,6 +112,15 @@ export class Visitor {
             return this.isId(p.value) || this.isId(p.value.left) || this.isId(p.value.right);
         }
         return false;
+    }
+
+    protected checkParameterLimit() {
+        const maxParams = this.options.maxParameters ?? 1000;
+        if (this.parameterSeed >= maxParams) {
+            throw new ODataV4ParseError({
+                msg: `Query too complex: parameter limit of ${maxParams} exceeded.`
+            });
+        }
     }
 
     protected VisitComparisonExpression(node: Lexer.Token, context: any, operator: string) {
@@ -278,12 +292,27 @@ export class Visitor {
     }
 
     protected VisitExpand(node: Lexer.Token, context: any) {
+        const maxDepth = this.options.maxExpandDepth ?? 5;
+        const maxCount = this.options.maxExpandCount ?? 10;
+
+
+        if (this.expandDepth >= maxDepth) {
+            throw new ODataV4ParseError({ msg: `Maximum expansion depth of ${maxDepth} exceeded.` });
+        }
+
         node.value.items.forEach((item) => {
+            this.expandCounter.count++;
+            if (this.expandCounter.count > maxCount) {
+                throw new ODataV4ParseError({ msg: `Maximum expansion count of ${maxCount} exceeded.` });
+            }
+
             let expandPath = item.value.path.raw;
             let visitor = this.includes.filter(v => v.navigationProperty == expandPath)[0];
             if (!visitor) {
                 visitor = new Visitor(this.options);
                 visitor.parameterSeed = this.parameterSeed;
+                visitor.expandDepth = this.expandDepth + 1;
+                visitor.expandCounter = this.expandCounter; // Share the counter
                 this.includes.push(visitor);
             }
             visitor.Visit(item);
@@ -327,6 +356,11 @@ export class Visitor {
     }
 
     protected VisitSearch(node: Lexer.Token, context: any) {
+        if (!this.options.enableSearch) {
+            throw new ODataV4ParseError({
+                msg: "$search is disabled."
+            });
+        }
         // TODO: this is a placeholder implementation -- it is broken.
         this.search = node.value.value;
 
@@ -353,16 +387,25 @@ export class Visitor {
     }
 
     protected VisitSkip(node: Lexer.Token, context: any) {
-        this.skip = +node.value.raw;
-        if (this.skip < 0) {
+        const value = +node.value.raw;
+        const maxSkip = this.options.maxSkip ?? 1000000;
+        if (value > maxSkip) {
             throw new ODataV4ParseError({
-                msg: "The $skip query option must be a non-negative integer."
+                msg: `The $skip value must not exceed ${maxSkip}.`
             });
         }
+        this.skip = value;
     }
 
     protected VisitTop(node: Lexer.Token, context: any) {
-        this.limit = +node.value.raw;
+        const value = +node.value.raw;
+        const maxTop = this.options.maxTop ?? 10000;
+        if (value > maxTop) {
+            throw new ODataV4ParseError({
+                msg: `The $top value must not exceed ${maxTop}.`
+            });
+        }
+        this.limit = value;
     }
 
     protected VisitGroupBy(node: Lexer.Token, context: any) {
@@ -465,6 +508,7 @@ export class Visitor {
                 // this.VisitLiteral(node.value.right.values[i], context);
                 const value = Literal.convert(item.value, item.raw);
 
+                this.checkParameterLimit();
                 const seed = `$param${this.parameterSeed++}`;
                 this.parameters.set(seed, value);
                 items.push(seed);
@@ -663,6 +707,7 @@ export class Visitor {
     protected VisitLiteral(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (this.options.useParameters) {
+            this.checkParameterLimit();
             let name = `$literal${this.parameterSeed++}`;
             let value = Literal.convert(node.value, node.raw);
 
@@ -678,6 +723,7 @@ export class Visitor {
         const method = node.value.method;
         const params = node.value.parameters || [];
         let fn: string;
+        this.checkParameterLimit();
         const name = `$param${this.parameterSeed++}`;
 
         switch (method) {
@@ -842,6 +888,19 @@ export class Visitor {
                     ? "time::now()"
                     : "NOW()";
                 break;
+            case "substring":
+                this[target] += this.type == SQLLang.SurrealDB
+                    ? "string::slice("
+                    : "SUBSTRING(";
+                this.Visit(params[0], context);
+                this[target] += ", ";
+                this.Visit(params[1], context);
+                if (params[2]) {
+                    this[target] += ", ";
+                    this.Visit(params[2], context);
+                }
+                this[target] += ")";
+                break;
             case "trim":
                 this[target] += this.type == SQLLang.SurrealDB
                     ? "string::trim("
@@ -849,6 +908,8 @@ export class Visitor {
                 this.Visit(params[0], context);
                 this[target] += ")";
                 break;
+            default:
+                throw new ODataV4ParseError({ msg: `Function '${method}' is not supported or allowed.` });
         }
     }
 

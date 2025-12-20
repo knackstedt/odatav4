@@ -1,12 +1,18 @@
-import { Visitor, SQLLang } from "./visitor";
-import { filter, query } from "./parser";
 import Lexer from './lexer';
+import { filter, query } from "./parser";
+import { SQLLang, Visitor } from "./visitor";
 
 export { SQLLang } from "./visitor";
 
 export interface SqlOptions {
     useParameters?: boolean;
     type?: SQLLang;
+    maxExpandDepth?: number;
+    maxExpandCount?: number;
+    maxTop?: number;
+    maxSkip?: number;
+    maxParameters?: number;
+    enableSearch?: boolean;
 }
 
 /**

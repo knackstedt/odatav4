@@ -2,8 +2,9 @@ import * as express from "express";
 import { route } from './util';
 
 import { RecordId, Surreal } from 'surrealdb';
-import { createQuery, SQLLang } from '../parser/main';
+import { createQuery, SQLLang, SqlOptions } from '../parser/main';
 import { renderQuery } from '../parser/query-renderer';
+import { ODataV4ParseError } from '../parser/utils';
 import { ODataExpressConfig, ODataExpressTable, ParsedQuery } from '../types';
 import { getJSONSchema, getODataMetadata } from '../util/metadata';
 
@@ -118,7 +119,8 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
 };
 
 export const parseODataRequest = (
-    urlPath: string
+    urlPath: string,
+    options?: SqlOptions
 ): ParsedQuery => {
     // If we don't get a full URL, fake one.
     if (!/https?:\/\//.test(urlPath)) {
@@ -141,7 +143,8 @@ export const parseODataRequest = (
     }
 
     const rootNode = createQuery(odataQuery, {
-        type: SQLLang.SurrealDB
+        type: SQLLang.SurrealDB,
+        ...options
     });
 
     return {
@@ -167,10 +170,11 @@ export const parseODataRequest = (
 export const ODataV4ToSurrealQL = (
     table: string,
     urlPath: string | ParsedQuery,
-    fetch = [] as string | string[]
+    fetch = [] as string | string[],
+    options?: SqlOptions
 ) => {
     const parsed = typeof urlPath === 'string'
-        ? parseODataRequest(urlPath)
+        ? parseODataRequest(urlPath, options)
         : urlPath;
 
     return {
@@ -192,25 +196,26 @@ export const RunODataV4SelectFilter = async (
     urlPath: string,
     fetch = [] as string | string[],
     parsed?: ParsedQuery,
-    maxPageSize?: number
+    options?: { maxPageSize?: number; } & SqlOptions
 ) => {
 
     // Ensure we have a parsed query object
     if (!parsed) {
-        parsed = parseODataRequest(urlPath);
+        parsed = parseODataRequest(urlPath, options);
     }
 
     // Enforce maxPageSize
-    if (maxPageSize !== undefined && maxPageSize > 0) {
-        if (parsed.limit === undefined || parsed.limit > maxPageSize) {
-            parsed.limit = maxPageSize;
+    if (options?.maxPageSize !== undefined && options.maxPageSize > 0) {
+        if (parsed.limit === undefined || parsed.limit > options.maxPageSize) {
+            parsed.limit = options.maxPageSize;
         }
     }
 
     const converterResult = await ODataV4ToSurrealQL(
         table,
         parsed,
-        fetch
+        fetch,
+        options
     );
 
     let {
@@ -555,7 +560,7 @@ export const SurrealODataV4Middleware = (
             url.toString(),
             tableConfig.fetch,
             req['odata'],
-            config.maxPageSize
+            config
         );
 
         if (typeof tableConfig.afterRecordGet == "function") {
@@ -590,6 +595,19 @@ export const SurrealODataV4Middleware = (
         const result = await ODataCRUDMethods(db, config, req);
         res.send(Array.isArray(result) ? result.map(r => r.result) : result.result);
     }));
+
+    // Error handler for parsing errors
+    router.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+        if (err instanceof ODataV4ParseError || (err.message && err.message.startsWith("ODataV4ParseError"))) {
+            res.status(400).send({ error: { message: err.message } });
+        }
+        else if (err.status) {
+            res.status(err.status).send({ error: { message: err.message } });
+        }
+        else {
+            next(err);
+        }
+    });
 
     return router;
 }

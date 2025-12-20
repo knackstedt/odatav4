@@ -15,7 +15,8 @@ export namespace Expressions {
             functionExpr(value, index) ||
             negateExpr(value, index) ||
             parenExpr(value, index) ||
-            castExpr(value, index);
+            castExpr(value, index) ||
+            isofExpr(value, index);
 
         if (!token) return;
 
@@ -39,9 +40,7 @@ export namespace Expressions {
     }
 
     export function boolCommonExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        let token = isofExpr(value, index) ||
-            boolMethodCallExpr(value, index) ||
-            notExpr(value, index) ||
+        let token = notExpr(value, index) ||
             commonExpr(value, index) ||
             boolParenExpr(value, index);
 
@@ -271,6 +270,10 @@ export namespace Expressions {
             toLowerMethodCallExpr(value, index) ||
             toUpperMethodCallExpr(value, index) ||
             trimMethodCallExpr(value, index) ||
+            endsWithMethodCallExpr(value, index) ||
+            startsWithMethodCallExpr(value, index) ||
+            containsMethodCallExpr(value, index) ||
+            intersectsMethodCallExpr(value, index) ||
             substringMethodCallExpr(value, index) ||
             substringOfMethodCallExpr(value, index) ||
             concatMethodCallExpr(value, index) ||

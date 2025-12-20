@@ -57,6 +57,15 @@ class ODataExpressTableConfig<T = unknown> {
          * Shorthand to specify roles that can perform any action (get, post, put, patch, delete).
          */
         all?: string[];
+
+        /**
+         * Field-level access control: specify which roles can read specific fields.
+         * Fields not listed are accessible to all users with table read permission.
+         * Example: { password: ['admin'], ssn: ['admin', 'hr'] }
+         */
+        restrictedFields?: {
+            [fieldName: string]: string[];  // roles that can read this field
+        };
     };
 
     /**
@@ -98,6 +107,21 @@ class ODataExpressTableConfig<T = unknown> {
      * Hook that is called after record(s) are mutated (POST, PUT, PATCH, DELETE).
      */
     afterRecordMutate?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Row-level security filter: Inject additional WHERE clause conditions based on user context.
+     * This is useful for multi-tenant apps or restricting users to their own data.
+     * Example: (req) => `ownerId = '${req.session.userId}'`
+     * The returned string will be AND'd with the user's $filter query.
+     */
+    rowLevelFilter?: (req: express.Request) => string;
+
+    /**
+     * Whitelist of fields allowed in $orderby to prevent field enumeration attacks.
+     * If specified, only these fields can be used in $orderby clauses.
+     * If not specified, all fields are allowed (default behavior).
+     */
+    allowedOrderByFields?: string[];
 
     /**
      * Hook that is called before record(s) are fetched (GET).
@@ -189,6 +213,30 @@ export type ODataExpressConfig = {
      * Maximum page size for $top to prevent excessive data retrieval.
      */
     maxPageSize?: number;
+
+    /**
+     * Maximum depth of nested $expand clauses to prevent stack overflow/DoS.
+     * Default: 5
+     */
+    maxExpandDepth?: number;
+
+    /**
+     * Maximum total number of expanded items in a single request.
+     * Default: 10
+     */
+    maxExpandCount?: number;
+
+    /**
+     * Maximum value for $top to prevent excessive data retrieval.
+     * Default: 10000
+     */
+    maxTop?: number;
+
+    /**
+     * Maximum value for $skip to prevent excessive seek operations.
+     * Default: 1000000
+     */
+    maxSkip?: number;
 };
 
 

@@ -10,7 +10,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
     describe('System Query Options', () => {
         it('$select', () => {
             const result = parse('$select=Name,Age');
-            expect(result.select).toBe("type::field($select0), type::field($select1)");
+            expect(result.select).toBe("type::field($select0) AS `Name`, type::field($select1) AS `Age`");
         });
 
         it('$select *', () => {
