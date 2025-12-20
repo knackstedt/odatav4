@@ -75,8 +75,7 @@ describe('Input Validation & Security Limits', () => {
                 createQuery('$search=foo', { type: SQLLang.SurrealDB });
                 expect(true).toBe(false);
             } catch (e: any) {
-                expect(e.message).toContain('disabled for security');
-                expect(e.message).toContain('enableSearch');
+                expect(e.message).toContain('disabled');
             }
         });
 

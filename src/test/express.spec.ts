@@ -589,24 +589,19 @@ describe("OData V4 - $id Tests", () => {
 });
 
 describe("OData V4 - $search Tests (Partial Support)", () => {
-    test("should search with simple query", async () => {
-        // Note: $search support is partial, this may not work as expected
+    test("should reject $search by default (disabled for security)", async () => {
         const response = await request(app)
             .get("/api/odata/post?$search=qui&$top=10");
 
-        // Accept either 200 or 501 (not implemented) as valid responses
-        expect([200, 501]).toContain(response.status);
-
-        if (response.status === 200) {
-            expect(response.body.value).toBeArray();
-        }
+        // $search is disabled by default, expect 400
+        expect(response.status).toBe(400);
     });
 
-    test("should combine $search with other parameters", async () => {
+    test("should reject $search in combination queries", async () => {
         const response = await request(app)
             .get("/api/odata/post?$search=est&$top=5&$orderby=id asc");
 
-        expect([200, 501]).toContain(response.status);
+        expect(response.status).toBe(400);
     });
 });
 

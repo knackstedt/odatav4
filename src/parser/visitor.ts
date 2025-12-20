@@ -388,6 +388,11 @@ export class Visitor {
 
     protected VisitSkip(node: Lexer.Token, context: any) {
         const value = +node.value.raw;
+        if (value < 0) {
+            throw new ODataV4ParseError({
+                msg: "The $skip query option must be a non-negative integer."
+            });
+        }
         const maxSkip = this.options.maxSkip ?? 1000000;
         if (value > maxSkip) {
             throw new ODataV4ParseError({

@@ -72,8 +72,11 @@ describe('Comprehensive OData V4 Test Suite', () => {
         });
 
         it('$search', () => {
-            const result = parse('$search=blue');
-            // Search is visited but property mapping logic is partial/placeholder in visitor
+            // $search is disabled by default for security
+            expect(() => createQuery('$search=blue', { type: SQLLang.SurrealDB })).toThrow();
+
+            // Enable search to test functionality
+            const result = createQuery('$search=blue', { type: SQLLang.SurrealDB, enableSearch: true });
             expect(result.search).toBe("blue");
         });
     });

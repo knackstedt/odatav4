@@ -32,7 +32,7 @@ describe("OData Middleware", () => {
         });
 
         test("parses search", () => {
-            const parsed = parseODataRequest("/table?$search=testing");
+            const parsed = parseODataRequest("/table?$search=testing", { enableSearch: true });
             expect(parsed.search).toBe("testing");
         });
 
