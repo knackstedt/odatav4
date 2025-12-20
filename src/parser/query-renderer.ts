@@ -24,7 +24,11 @@ function createInspectableString(sql: string, parameters: Record<string, any>) {
     };
     return new Proxy(new String(sql), {
         get(target, prop, receiver) {
-            if (prop === util.inspect?.custom) {
+            // String classes that are proxies need to be able to do this
+            if (prop === 'toString') {
+                return () => sql;
+            }
+            else if (prop === util.inspect?.custom) {
                 return (depth: number, options: any) => {
 
                     const base = '\x1b[38;2;255;255;255m';
