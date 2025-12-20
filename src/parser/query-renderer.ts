@@ -1,5 +1,5 @@
 import util from 'util';
-import { ParsedQuery } from "../types";
+import type { ParsedQuery } from "../types";
 import { Visitor } from "./visitor";
 
 function createInspectableString(sql: string, parameters: Record<string, any>) {

@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 
 /**
  * Function wrapper for Express to properly handle async exceptions in routes.
@@ -8,7 +8,7 @@ export const route = (fn: (req: Request, res: Response, next: NextFunction) => a
         // @ts-ignore
         fn(req, res, next).catch(ex => next(ex));
     }
-    catch(ex) {
+    catch (ex) {
         next(ex);
     }
 }

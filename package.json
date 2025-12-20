@@ -2,7 +2,17 @@
     "name": "@dotglitch/odatav4",
     "version": "4.0.0",
     "description": "Maintained ODataV4 adapter. Supports SurrealDB.",
-    "main": "dist/main.js",
+    "type": "module",
+    "main": "./dist/odatav4.cjs",
+    "module": "./dist/odatav4.js",
+    "types": "./dist/main.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/main.d.ts",
+            "import": "./dist/odatav4.js",
+            "require": "./dist/odatav4.cjs"
+        }
+    },
     "author": "Andrew G. Knackstedt",
     "repository": {
         "url": "https://github.com/knackstedt/odatav4"
@@ -13,7 +23,7 @@
         "readme.md"
     ],
     "scripts": {
-        "build": "tsc",
+        "build": "vite build",
         "test": "bun test"
     },
     "devDependencies": {
@@ -25,7 +35,9 @@
         "supertest": "^7.1.4",
         "surrealdb": "^2.0.0-alpha.14",
         "tslib": "^2.8.1",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "vite": "^6.4.1",
+        "vite-plugin-dts": "^4.5.4"
     },
     "peerDependencies": {
         "express": "^5.1.0",

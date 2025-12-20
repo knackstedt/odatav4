@@ -1,6 +1,6 @@
 import Lexer from './lexer';
 import { Literal } from "./literal";
-import { SqlOptions } from "./main";
+import type { SqlOptions } from "./main";
 import { ODataV4ParseError } from './utils';
 
 export class SQLLiteral extends Literal {

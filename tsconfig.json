@@ -1,21 +1,31 @@
 {
-  "compilerOptions": {
-    "rootDir": "./src/",
-    "outDir": "./dist/",
-    "sourceMap": true,
-    "declaration": true,
-    "downlevelIteration": false,
-    "importHelpers": true,
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "target": "es2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
-    "types": ["bun"]
-  },
-  "exclude": [
-    "src/test/**/*.ts",
-    "dist/**/*.ts"
-  ]
+    "compilerOptions": {
+        "sourceMap": true,
+        "downlevelIteration": false,
+        "importHelpers": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "verbatimModuleSyntax": true,
+        "isolatedModules": true,
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": [
+            "ES2020"
+        ],
+        "types": [
+            "bun"
+        ],
+        "skipLibCheck": true,
+        "strict": false
+    },
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "src/test/**/*.ts",
+        "dist/**/*.ts",
+        "node_modules"
+    ]
 }

@@ -2,10 +2,10 @@ import * as express from "express";
 import { route } from './util';
 
 import { RecordId, Surreal } from 'surrealdb';
-import { createQuery, SQLLang, SqlOptions } from '../parser/main';
+import { createQuery, SQLLang, type SqlOptions } from '../parser/main';
 import { renderQuery } from '../parser/query-renderer';
 import { ODataV4ParseError } from '../parser/utils';
-import { ODataExpressConfig, ODataExpressTable, ParsedQuery } from '../types';
+import type { ODataExpressConfig, ODataExpressTable, ParsedQuery } from '../types';
 import { getJSONSchema, getODataMetadata } from '../util/metadata';
 
 
