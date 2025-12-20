@@ -404,10 +404,10 @@ export class Visitor {
 
     protected VisitTop(node: Lexer.Token, context: any) {
         const value = +node.value.raw;
-        const maxTop = this.options.maxTop ?? 10000;
-        if (value > maxTop) {
+        const maxPageSize = this.options.maxPageSize ?? 500;
+        if (value > maxPageSize) {
             throw new ODataV4ParseError({
-                msg: `The $top value must not exceed ${maxTop}.`
+                msg: `The $top value must not exceed ${maxPageSize}.`
             });
         }
         this.limit = value;

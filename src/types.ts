@@ -111,10 +111,10 @@ class ODataExpressTableConfig<T = unknown> {
     /**
      * Row-level security filter: Inject additional WHERE clause conditions based on user context.
      * This is useful for multi-tenant apps or restricting users to their own data.
-     * Example: (req) => `ownerId = '${req.session.userId}'`
+     * Example: (req) => ({ partial: `ownerId = $ownerId`, parameters: { ownerId: req.session.userId } })
      * The returned string will be AND'd with the user's $filter query.
      */
-    rowLevelFilter?: (req: express.Request) => string;
+    rowLevelFilter?: (req: express.Request) => string | { partial: string, parameters: Record<string, any>; };
 
     /**
      * Whitelist of fields allowed in $orderby to prevent field enumeration attacks.
@@ -191,26 +191,12 @@ export type ODataExpressConfig = {
     variables?: Record<any, any> | ((req: express.Request, item: Record<any, any>) => Record<any, any> | Promise<Record<any, any>>);
 
     /**
-     * WARNING: Experimental feature, may change or be removed in future versions.
-     * Enable automatic type casting based on SurrealDB schema.
-     * When enabled, the middleware will attempt to cast query parameters and payload fields to the types defined in the SurrealDB schema.
-     * This helps ensure that data is stored and queried in the correct format, reducing type-related errors.
-     * Default is false.
-     *
-     * @experimental
-     */
-    enableAutoTypeCasting?: boolean;
-
-    /**
      * Global hooks that apply to all tables.
      */
     // hooks?: ODataExpressHooks,
     /**
-     * Default page size for $top if not specified in the query.
-     */
-    // defaultPageSize?: number,
-    /**
      * Maximum page size for $top to prevent excessive data retrieval.
+     * Default: 500
      */
     maxPageSize?: number;
 
@@ -225,12 +211,6 @@ export type ODataExpressConfig = {
      * Default: 10
      */
     maxExpandCount?: number;
-
-    /**
-     * Maximum value for $top to prevent excessive data retrieval.
-     * Default: 10000
-     */
-    maxTop?: number;
 
     /**
      * Maximum value for $skip to prevent excessive seek operations.

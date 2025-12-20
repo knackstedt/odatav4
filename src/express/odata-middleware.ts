@@ -204,7 +204,7 @@ export const RunODataV4SelectFilter = async (
         parsed = parseODataRequest(urlPath, options);
     }
 
-    // Enforce maxPageSize
+    // Apply maxPageSize - server-driven limit
     if (options?.maxPageSize !== undefined && options.maxPageSize > 0) {
         if (parsed.limit === undefined || parsed.limit > options.maxPageSize) {
             parsed.limit = options.maxPageSize;
@@ -453,10 +453,6 @@ export const SurrealODataV4Middleware = (
     const connection = config.resolveDb;
     const tables: (ODataExpressTable<any> & { _fields?: { type: string; }; })[] = config.tables;
 
-    if (config.enableAutoTypeCasting) {
-        // Experimental. TBD.
-    }
-
     if (!connection) {
         throw new Error("No connection resolver specified");
     }
@@ -543,6 +539,19 @@ export const SurrealODataV4Middleware = (
             if (typeof tableConfig.afterRecordGet == "function")
                 result = await tableConfig.afterRecordGet(req, result);
 
+            // Filter restricted fields based on user roles
+            if (tableConfig.accessControl?.restrictedFields) {
+                const userRoles = req['session']?.profile?.roles ?? [];
+                const restrictedFields = tableConfig.accessControl.restrictedFields;
+
+                for (const [fieldName, allowedRoles] of Object.entries(restrictedFields)) {
+                    const hasAccess = allowedRoles.some(role => userRoles.includes(role));
+                    if (!hasAccess) {
+                        delete result[fieldName];
+                    }
+                }
+            }
+
             res.contentType("application/json");
             res.send(JSON.stringify(result, (key, value) => {
                 if (typeof value === 'bigint') return value.toString();
@@ -572,6 +581,38 @@ export const SurrealODataV4Middleware = (
             }
         }
 
+        // Inject row-level filter if configured
+        if (typeof tableConfig.rowLevelFilter === 'function') {
+            const rowFilter = await (async () => {
+                const filterResult = tableConfig.rowLevelFilter(req);
+                return filterResult;
+            })();
+
+            let additionalWhere: string;
+            let additionalParams: Record<string, any> = {};
+
+            if (typeof rowFilter === 'string') {
+                additionalWhere = rowFilter;
+            }
+            else {
+                additionalWhere = rowFilter.partial;
+                additionalParams = rowFilter.parameters || {};
+            }
+
+            // Merge row-level filter with user's $filter
+            if (req['odata'].where) {
+                req['odata'].where = `(${req['odata'].where}) AND (${additionalWhere})`;
+            }
+            else {
+                req['odata'].where = additionalWhere;
+            }
+
+            // Merge parameters
+            for (const [key, value] of Object.entries(additionalParams)) {
+                req['odata'].parameters.set(key, value);
+            }
+        }
+
         const result = await RunODataV4SelectFilter(
             db,
             table,
@@ -593,6 +634,25 @@ export const SurrealODataV4Middleware = (
             }
 
             result.value = processedValues;
+        }
+
+        // Filter restricted fields based on user roles
+        if (tableConfig.accessControl?.restrictedFields) {
+            const userRoles = req['session']?.profile?.roles ?? [];
+            const restrictedFields = tableConfig.accessControl.restrictedFields;
+
+            result.value = result.value.map(record => {
+                const filteredRecord = { ...record };
+
+                for (const [fieldName, allowedRoles] of Object.entries(restrictedFields)) {
+                    const hasAccess = allowedRoles.some(role => userRoles.includes(role));
+                    if (!hasAccess) {
+                        delete filteredRecord[fieldName];
+                    }
+                }
+
+                return filteredRecord;
+            });
         }
 
         res.setHeader('Content-Type', 'application/json');

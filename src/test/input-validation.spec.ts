@@ -5,23 +5,23 @@ import { ODataV4ParseError } from '../parser/utils';
 describe('Input Validation & Security Limits', () => {
 
     describe('$top Validation (#6)', () => {
-        it('should allow $top up to default limit (10000)', () => {
-            expect(() => createQuery('$top=10000', { type: SQLLang.SurrealDB })).not.toThrow();
-            expect(() => createQuery('$top=5000', { type: SQLLang.SurrealDB })).not.toThrow();
+        it('should allow $top up to default limit (500)', () => {
+            expect(() => createQuery('$top=500', { type: SQLLang.SurrealDB })).not.toThrow();
+            expect(() => createQuery('$top=250', { type: SQLLang.SurrealDB })).not.toThrow();
             expect(() => createQuery('$top=1', { type: SQLLang.SurrealDB })).not.toThrow();
         });
 
-        it('should reject $top exceeding default limit (10000)', () => {
-            expect(() => createQuery('$top=10001', { type: SQLLang.SurrealDB }))
+        it('should reject $top exceeding default limit (500)', () => {
+            expect(() => createQuery('$top=501', { type: SQLLang.SurrealDB }))
                 .toThrow(ODataV4ParseError);
             expect(() => createQuery('$top=99999999', { type: SQLLang.SurrealDB }))
                 .toThrow(ODataV4ParseError);
         });
 
-        it('should respect custom maxTop limit', () => {
-            expect(() => createQuery('$top=100', { type: SQLLang.SurrealDB, maxTop: 50 }))
+        it('should respect custom maxPageSize limit', () => {
+            expect(() => createQuery('$top=100', { type: SQLLang.SurrealDB, maxPageSize: 50 }))
                 .toThrow(ODataV4ParseError);
-            expect(() => createQuery('$top=50', { type: SQLLang.SurrealDB, maxTop: 50 }))
+            expect(() => createQuery('$top=50', { type: SQLLang.SurrealDB, maxPageSize: 50 }))
                 .not.toThrow();
         });
 
@@ -30,7 +30,7 @@ describe('Input Validation & Security Limits', () => {
                 createQuery('$top=20000', { type: SQLLang.SurrealDB });
                 expect(true).toBe(false); // Should not reach here
             } catch (e: any) {
-                expect(e.message).toContain('10000');
+                expect(e.message).toContain('500');
             }
         });
     });
@@ -132,14 +132,14 @@ describe('Input Validation & Security Limits', () => {
 
             expect(() => createQuery(query, {
                 type: SQLLang.SurrealDB,
-                maxTop: 50,
+                maxPageSize: 50,
                 maxSkip: 500,
                 maxParameters: 25
             })).toThrow(ODataV4ParseError);
 
             expect(() => createQuery(query, {
                 type: SQLLang.SurrealDB,
-                maxTop: 200,
+                maxPageSize: 200,
                 maxSkip: 2000,
                 maxParameters: 100
             })).not.toThrow();

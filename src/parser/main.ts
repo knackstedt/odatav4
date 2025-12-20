@@ -9,7 +9,7 @@ export interface SqlOptions {
     type?: SQLLang;
     maxExpandDepth?: number;
     maxExpandCount?: number;
-    maxTop?: number;
+    maxPageSize?: number;
     maxSkip?: number;
     maxParameters?: number;
     enableSearch?: boolean;

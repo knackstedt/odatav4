@@ -726,7 +726,7 @@ describe("OData V4 - Edge Cases and Error Handling", () => {
 
     test("should handle very large $top value", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$top=10000")
+            .get("/api/odata/post?$top=500")
             .expect(200);
 
         expect(response.body.value).toBeArray();
