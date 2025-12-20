@@ -63,6 +63,17 @@ beforeAll(async () => {
         },
         maxPageSize: 5
     }));
+    app.use("/api/odata-restricted", SurrealODataV4Middleware({
+        tables: [
+            new ODataExpressTable({
+                table: 'post',
+                allowedOrderByFields: ['id', 'title']
+            })
+        ],
+        resolveDb: () => {
+            return db;
+        }
+    }));
     (global as any).app = app;
 });
 

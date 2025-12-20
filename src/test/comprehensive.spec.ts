@@ -127,8 +127,8 @@ describe('Comprehensive OData V4 Test Suite', () => {
             expect(result).toBeDefined();
         });
 
-        it.skip('in', () => {
-            expect(filter('Name in (\'John\', \'Jane\')')).toContain("type::field($field1) INSIDE [$literal1, $literal2]");
+        it('in', () => {
+            expect(filter('Name in (\'John\', \'Jane\')')).toContain("type::field($field1) in [$param1, $param2]");
         });
     });
 
@@ -155,7 +155,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
             expect(filter('Price mod 2 eq 0')).toContain("type::field($field1) % $literal1 = $literal2");
         });
 
-        it.skip('negate', () => {
+        it('negate', () => {
             expect(filter('-Price eq 5')).toBeDefined();
         });
     });
@@ -184,7 +184,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
             expect(filter("indexof(Name, 'a') eq 1")).toContain("(IF string::contains(type::string(type::field($field1)), type::string($literal2)) THEN string::len(string::split(type::string(type::field($field2)), type::string($literal3))[0]) ELSE -1 END) = $literal4");
         });
 
-        it.skip('substring', () => {
+        it('substring', () => {
             expect(filter("substring(Name, 1) eq 'ohn'")).toBeDefined();
         });
 
@@ -200,8 +200,8 @@ describe('Comprehensive OData V4 Test Suite', () => {
             expect(filter("trim(Name) eq 'John'")).toContain("string::trim(type::field($field1)) = $literal2");
         });
 
-        it.skip('concat', () => {
-            expect(filter("concat(Name, ' Doe') eq 'John Doe'")).toContain("string::concat(type::field($field1), type::string($param1)) = $literal1");
+        it('concat', () => {
+            expect(filter("concat(Name, ' Doe') eq 'John Doe'")).toContain("string::concat(type::field($field1), $literal2) = $literal3");
         });
     });
 
@@ -216,9 +216,9 @@ describe('Comprehensive OData V4 Test Suite', () => {
         it('second', () => expect(filter("second(BirthDate) eq 0")).toContain("time::second(type::field($field1))"));
         it('now', () => expect(filter("BirthDate lt now()")).toContain("time::now()"));
 
-        it.skip('fractionalseconds', () => expect(filter("fractionalseconds(BirthDate) gt 0")).toBeDefined());
-        it.skip('date', () => expect(filter("date(BirthDate) eq 2020-01-01")).toBeDefined());
-        it.skip('time', () => expect(filter("time(BirthDate) eq 12:00:00")).toBeDefined());
+        it('fractionalseconds', () => expect(filter("fractionalseconds(BirthDate) gt 0")).toBeDefined());
+        it('date', () => expect(filter("date(BirthDate) eq 2020-01-01")).toBeDefined());
+        it('time', () => expect(filter("time(BirthDate) eq 12:00:00")).toBeDefined());
     });
 
     describe('Filter Operations - Math Functions', () => {

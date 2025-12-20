@@ -748,14 +748,15 @@ describe("OData V4 - Edge Cases and Error Handling", () => {
         expect([200, 400]).toContain(response.status);
     });
 
-    // TODO: Do we want to support this?
-    test.skip("should handle invalid field names in $orderby", async () => {
+
+    test("should handle invalid field names in $orderby", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$orderby=nonExistentField asc");
+            .get("/api/odata-restricted/post?$orderby=nonExistentField asc");
 
         // Should return an error
-        expect([400, 500]).toContain(response.status);
+        expect([400]).toContain(response.status);
     });
+
 
     test("should handle special characters in filter values", async () => {
         const response = await request(app)

@@ -554,6 +554,24 @@ export const SurrealODataV4Middleware = (
 
         let url = new URL(req.protocol + "://" + req.hostname + req.originalUrl);
 
+        // Validate $orderby fields if allowedOrderByFields is configured
+        if (tableConfig.allowedOrderByFields && req['odata']?.orderby) {
+            // Extract field names from orderby string
+            const orderbyFields = req['odata'].orderby
+                .split(',')
+                .map((f: string) => f.trim().split(/\s+/)[0]); // Get field name, strip ASC/DESC
+
+            const invalidFields = orderbyFields.filter(
+                (field: string) => !tableConfig.allowedOrderByFields.includes(field)
+            );
+
+            if (invalidFields.length > 0) {
+                throw new ODataV4ParseError({
+                    msg: `Invalid $orderby field(s): ${invalidFields.join(', ')}. Allowed fields: ${tableConfig.allowedOrderByFields.join(', ')}`
+                });
+            }
+        }
+
         const result = await RunODataV4SelectFilter(
             db,
             table,

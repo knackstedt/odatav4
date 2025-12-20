@@ -538,6 +538,72 @@ export class Visitor {
         this[target] += ")";
     }
 
+    protected VisitNegateExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+        this[target] += "-(";
+        this.Visit(node.value, context);
+        this[target] += ")";
+    }
+
+    protected VisitHasExpression(node: Lexer.Token, context: any) {
+        // OData 'has' is for bitwise flags/enums
+        // SurrealDB doesn't have direct bitwise AND, but we can check array membership
+        // For now, implement as array contains check
+        const target = context?.target || 'where';
+
+        this.Visit(node.value.left, context);
+        this[target] += " CONTAINS ";
+        this.Visit(node.value.right, context);
+    }
+
+    protected VisitIsOfExpression(node: Lexer.Token, context: any) {
+        // isof() checks if expression is of specified type
+        // Map to SurrealDB type::is::* functions
+        const target = context?.target || 'where';
+        const typeName = node.value.right?.value || node.value.right?.raw;
+
+        // Map EDM types to SurrealDB type checks
+        const typeMap: Record<string, string> = {
+            'Edm.String': 'string',
+            'Edm.Int32': 'number',
+            'Edm.Int64': 'number',
+            'Edm.Decimal': 'number',
+            'Edm.Double': 'number',
+            'Edm.Boolean': 'bool',
+            'Edm.Guid': 'string',
+            'Edm.Date': 'datetime',
+            'Edm.DateTimeOffset': 'datetime'
+        };
+
+        const surrealType = typeMap[typeName] || 'string';
+        this[target] += `type::is::${surrealType}(`;
+        this.Visit(node.value.left, context);
+        this[target] += ")";
+    }
+
+    protected VisitCastExpression(node: Lexer.Token, context: any) {
+        // cast() converts expression to specified type
+        const target = context?.target || 'where';
+        const typeName = node.value.right?.value || node.value.right?.raw;
+
+        // Map EDM types to SurrealDB type conversion
+        const typeMap: Record<string, string> = {
+            'Edm.String': 'string',
+            'Edm.Int32': 'int',
+            'Edm.Int64': 'int',
+            'Edm.Decimal': 'decimal',
+            'Edm.Double': 'float',
+            'Edm.Boolean': 'bool',
+            'Edm.Date': 'datetime',
+            'Edm.DateTimeOffset': 'datetime'
+        };
+
+        const surrealType = typeMap[typeName] || 'string';
+        this[target] += `type::${surrealType}(`;
+        this.Visit(node.value.left, context);
+        this[target] += ")";
+    }
+
     protected VisitParenExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         this[target] += "(";
@@ -847,6 +913,16 @@ export class Visitor {
                 this.Visit(params[0], context);
                 this[target] += ")";
                 break;
+            case "concat":
+                this[target] += this.type == SQLLang.SurrealDB ? "string::concat(" : "CONCAT(";
+                for (let i = 0; i < params.length; i++) {
+                    this.Visit(params[i], context);
+                    if (i < params.length - 1) {
+                        this[target] += ", ";
+                    }
+                }
+                this[target] += ")";
+                break;
             case "toupper":
                 this[target] += this.type == SQLLang.SurrealDB ? "string::uppercase(" : "UCASE(";
                 this.Visit(params[0], context);
@@ -912,6 +988,30 @@ export class Visitor {
                     : "TRIM(' ' FROM ";
                 this.Visit(params[0], context);
                 this[target] += ")";
+                break;
+            case "fractionalseconds":
+                // Extract sub-second precision (nanoseconds) and convert to fractional seconds
+                if (this.type == SQLLang.SurrealDB) {
+                    this[target] += "(time::nanos(";
+                    this.Visit(params[0], context);
+                    this[target] += ") % 1000000000 / 1000000000.0)";
+                }
+                break;
+            case "date":
+                // Extract just the date component
+                if (this.type == SQLLang.SurrealDB) {
+                    this[target] += "time::floor(";
+                    this.Visit(params[0], context);
+                    this[target] += ", 1d)";
+                }
+                break;
+            case "time":
+                // Extract just the time component (duration since midnight in nanoseconds)
+                if (this.type == SQLLang.SurrealDB) {
+                    this[target] += "(time::nanos(";
+                    this.Visit(params[0], context);
+                    this[target] += ") % 86400000000000)";
+                }
                 break;
             default:
                 throw new ODataV4ParseError({ msg: `Function '${method}' is not supported or allowed.` });
