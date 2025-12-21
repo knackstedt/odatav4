@@ -162,29 +162,62 @@ export namespace PrimitiveLiteral {
     export function stringValue(value: Utils.SourceArray, index: number): Lexer.Token {
         let start = index;
         let squote = Lexer.SQUOTE(value, start);
-        if (!squote) return;
+        let dquote = Lexer.DQUOTE(value[start]) ? start + 1 : undefined;
 
-        index = squote;
+        // Check if starts with either single or double quote
+        let quoteType: 'single' | 'double' | null = null;
+        if (squote) {
+            quoteType = 'single';
+            index = squote;
+        }
+        else if (dquote) {
+            quoteType = 'double';
+            index = dquote;
+        }
+        else {
+            return;
+        }
 
-        // Read characters until we find an unescaped closing quote
+        // Read characters until we find an unescaped closing quote of the same type
         while (index < value.length) {
-            squote = Lexer.SQUOTE(value, index);
+            if (quoteType === 'single') {
+                squote = Lexer.SQUOTE(value, index);
 
-            if (squote) {
-                // Found a single quote - check if it's escaped (doubled)
-                let nextSquote = Lexer.SQUOTE(value, squote);
-                if (nextSquote) {
-                    // This is an escaped quote (''), continue reading
-                    index = nextSquote;
-                } else {
-                    // This is the closing quote
-                    index = squote;
-                    return Lexer.tokenize(value, start, index, "Edm.String", Lexer.TokenType.Literal);
+                if (squote) {
+                    // Found a single quote - check if it's escaped (doubled)
+                    let nextSquote = Lexer.SQUOTE(value, squote);
+                    if (nextSquote) {
+                        // This is an escaped quote (''), continue reading
+                        index = nextSquote;
+                    }
+                    else {
+                        // This is the closing quote
+                        index = squote;
+                        return Lexer.tokenize(value, start, index, "Edm.String", Lexer.TokenType.Literal);
+                    }
                 }
-            } else {
-                // Not a quote, advance by one character
-                // Allow any character except unescaped single quote
-                index++;
+                else {
+                    // Not a quote, advance by one character
+                    index++;
+                }
+            }
+            else { // double quote
+                if (Lexer.DQUOTE(value[index])) {
+                    // Found a double quote - check if it's escaped (doubled)
+                    if (Lexer.DQUOTE(value[index + 1])) {
+                        // This is an escaped quote (""), continue reading
+                        index += 2;
+                    }
+                    else {
+                        // This is the closing quote
+                        index++;
+                        return Lexer.tokenize(value, start, index, "Edm.String", Lexer.TokenType.Literal);
+                    }
+                }
+                else {
+                    // Not a quote, advance by one character
+                    index++;
+                }
             }
         }
 
@@ -400,7 +433,7 @@ export namespace PrimitiveLiteral {
         let position = PrimitiveLiteral.positionLiteral(value, index);
         if (!position) {
             throw new ODataV4ParseError({
-                msg: "Expected coordinates in format (longitude latitude)",
+                msg: "Invalid Point data",
                 value: value,
                 index: index
             });
@@ -520,7 +553,7 @@ export namespace PrimitiveLiteral {
         let geo = itemLiteral(value, index);
         if (!geo) {
             throw new ODataV4ParseError({
-                msg: `Invalid ${prefix} data: expected at least one item`,
+                msg: `Invalid ${prefix || 'LineString'} data`,
                 value: value,
                 index: index
             });

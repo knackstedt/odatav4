@@ -702,6 +702,11 @@ export namespace Query {
         let token = PrimitiveLiteral.int32Value(value, index);
         if (!token) throw new ODataV4ParseError({ msg: "Expected integer for $skip", value, index });
         index = token.next;
+        // Validate that $skip is not negative
+        const skipValue = parseInt(token.raw, 10);
+        if (skipValue < 0)
+            throw new ODataV4ParseError({ msg: "$skip cannot be negative", value, index });
+
 
         return Lexer.tokenize(value, start, index, token, Lexer.TokenType.Skip);
     }
@@ -726,6 +731,10 @@ export namespace Query {
         let token = PrimitiveLiteral.int32Value(value, index);
         if (!token) throw new ODataV4ParseError({ msg: "Expected integer for $top", value, index });
         index = token.next;
+        // Validate that $top is not negative
+        const topValue = parseInt(token.raw, 10);
+        if (topValue < 0) throw new ODataV4ParseError({ msg: "$top cannot be negative", value, index });
+
 
         return Lexer.tokenize(value, start, index, token, Lexer.TokenType.Top);
     }
