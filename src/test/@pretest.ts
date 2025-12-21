@@ -1,5 +1,5 @@
 // setup.ts
-import { beforeAll } from "bun:test";
+import { afterAll, beforeAll } from "bun:test";
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import express from 'express';
 import { readFileSync } from 'fs';
@@ -77,6 +77,6 @@ beforeAll(async () => {
     (global as any).app = app;
 });
 
-process.on('exit', () => {
+afterAll(() => {
     procDb.kill();
 });
