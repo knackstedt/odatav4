@@ -1,6 +1,6 @@
-import Utils, { ODataV4ParseError } from "./utils";
 import Lexer from "./lexer";
 import NameOrIdentifier from "./name-or-identifier";
+import Utils, { ODataV4ParseError } from "./utils";
 
 export namespace PrimitiveLiteral {
     export function nullValue(value: Utils.SourceArray, index: number): Lexer.Token {
@@ -290,7 +290,7 @@ export namespace PrimitiveLiteral {
             });
         }
         if (value[monthNext] !== 0x2d) {
-            // Year-Month but no dash. Could be YYYY-MM expression? 
+            // Year-Month but no dash. Could be YYYY-MM expression?
             // Unlikely to be interpretation.
             throw new ODataV4ParseError({
                 msg: "Invalid Date format: Missing second separator",
@@ -380,13 +380,13 @@ export namespace PrimitiveLiteral {
 
     // geography and geometry literals
     export function positionLiteral(value: Utils.SourceArray, index: number): Lexer.Token {
-        let longitude = PrimitiveLiteral.doubleValue(value, index);
+        let longitude = PrimitiveLiteral.doubleValue(value, index) || PrimitiveLiteral.int64Value(value, index);
         if (!longitude) return;
 
         let next = Lexer.SKIPWHITESPACE(value, longitude.next);
         if (next === longitude.next) return;
 
-        let latitude = PrimitiveLiteral.doubleValue(value, next);
+        let latitude = PrimitiveLiteral.doubleValue(value, next) || PrimitiveLiteral.int64Value(value, next);
         if (!latitude) return;
 
         return Lexer.tokenize(value, index, latitude.next, { longitude, latitude }, Lexer.TokenType.Literal);
@@ -398,11 +398,23 @@ export namespace PrimitiveLiteral {
         index = open;
 
         let position = PrimitiveLiteral.positionLiteral(value, index);
-        if (!position) return;
+        if (!position) {
+            throw new ODataV4ParseError({
+                msg: "Expected coordinates in format (longitude latitude)",
+                value: value,
+                index: index
+            });
+        }
         index = position.next;
 
         let close = Lexer.CLOSE(value, index);
-        if (!close) return;
+        if (!close) {
+            throw new ODataV4ParseError({
+                msg: "Expected closing parenthesis ')'",
+                value: value,
+                index: index
+            });
+        }
         index = close;
 
         return Lexer.tokenize(value, start, index, position, Lexer.TokenType.Literal);
@@ -444,7 +456,13 @@ export namespace PrimitiveLiteral {
         index += 5;
 
         let data = PrimitiveLiteral.pointData(value, index);
-        if (!data) return;
+        if (!data) {
+            throw new ODataV4ParseError({
+                msg: "Invalid Point data: expected format Point(longitude latitude)",
+                value: value,
+                index: index
+            });
+        }
 
         return Lexer.tokenize(value, start, data.next, data, Lexer.TokenType.Literal);
     }
@@ -454,7 +472,13 @@ export namespace PrimitiveLiteral {
         index += 7;
 
         let data = PrimitiveLiteral.polygonData(value, index);
-        if (!data) return;
+        if (!data) {
+            throw new ODataV4ParseError({
+                msg: "Invalid Polygon data: expected format Polygon((ring))",
+                value: value,
+                index: index
+            });
+        }
 
         return Lexer.tokenize(value, start, data.next, data, Lexer.TokenType.Literal);
     }
@@ -467,7 +491,13 @@ export namespace PrimitiveLiteral {
         index += 10;
 
         let data = PrimitiveLiteral.lineStringData(value, index);
-        if (!data) return;
+        if (!data) {
+            throw new ODataV4ParseError({
+                msg: "Invalid LineString data: expected format LineString(position, position, ...)",
+                value: value,
+                index: index
+            });
+        }
         index = data.next;
 
         return Lexer.tokenize(value, start, index, data, Lexer.TokenType.Literal);
@@ -488,7 +518,13 @@ export namespace PrimitiveLiteral {
 
         let items = [];
         let geo = itemLiteral(value, index);
-        if (!geo) return;
+        if (!geo) {
+            throw new ODataV4ParseError({
+                msg: `Invalid ${prefix} data: expected at least one item`,
+                value: value,
+                index: index
+            });
+        }
         index = geo.next;
 
         while (geo) {
@@ -501,8 +537,12 @@ export namespace PrimitiveLiteral {
             }
 
             let comma = Lexer.COMMA(value, index);
-            if (!comma) return;
+            if (!comma) {
+                // console.log("multiGeoLiteralFactory missing comma", prefix, index);
+                return;
+            }
             index = comma;
+            index = Lexer.SKIPWHITESPACE(value, index);
 
             geo = itemLiteral(value, index);
             if (!geo) return;
@@ -511,6 +551,7 @@ export namespace PrimitiveLiteral {
 
         return Lexer.tokenize(value, start, index, { items }, Lexer.TokenType.Literal);
     }
+
     export function multiGeoLiteralOptionalFactory(value: Utils.SourceArray, index: number, prefix: string, itemLiteral: Function): Lexer.Token {
         if (!Utils.equals(value, index, prefix + "(")) return;
         let start = index;
@@ -520,7 +561,13 @@ export namespace PrimitiveLiteral {
         let close = Lexer.CLOSE(value, index);
         if (!close) {
             let geo = itemLiteral(value, index);
-            if (!geo) return;
+            if (!geo) {
+                throw new ODataV4ParseError({
+                    msg: `Invalid ${prefix} data: expected valid items`,
+                    value: value,
+                    index: index
+                });
+            }
             index = geo.next;
 
             while (geo) {
@@ -535,6 +582,7 @@ export namespace PrimitiveLiteral {
                 let comma = Lexer.COMMA(value, index);
                 if (!comma) return;
                 index = comma;
+                index = Lexer.SKIPWHITESPACE(value, index);
 
                 geo = itemLiteral(value, index);
                 if (!geo) return;
@@ -576,34 +624,20 @@ export namespace PrimitiveLiteral {
         return PrimitiveLiteral.fullGeoLiteralFactory(value, index, PrimitiveLiteral.polygonLiteral);
     }
     export function fullGeoLiteralFactory(value: Utils.SourceArray, index: number, literal: Function): Lexer.Token {
+        // console.log("fullGeoLiteralFactory", index, Utils.stringify(value, index, index + 10));
         let srid = PrimitiveLiteral.sridLiteral(value, index);
-        if (!srid) return;
+        // if (!srid) return;
 
-        let token = literal(value, srid.next);
-        if (!token) return;
+        let token = literal(value, srid ? srid.next : index);
+        if (!token) {
+            // console.log("fullGeoLiteralFactory failed literal parse", Utils.stringify(value, index, index + 20));
+            return;
+        }
 
         return Lexer.tokenize(value, index, token.next, { srid, value: token }, Lexer.TokenType.Literal);
     }
-
     export function geographyCollection(value: Utils.SourceArray, index: number): Lexer.Token {
-        let prefix = Lexer.geographyPrefix(value, index);
-        if (prefix === index) return;
-        let start = index;
-        index = prefix;
-
-        let squote = Lexer.SQUOTE(value, index);
-        if (!squote) return;
-        index = squote;
-
-        let point = PrimitiveLiteral.fullCollectionLiteral(value, index);
-        if (!point) return;
-        index = point.next;
-
-        squote = Lexer.SQUOTE(value, index);
-        if (!squote) return;
-        index = squote;
-
-        return Lexer.tokenize(value, start, index, "Edm.GeographyCollection", Lexer.TokenType.Literal);
+        return PrimitiveLiteral.geoLiteralFactory(value, index, "Edm.GeographyCollection", Lexer.geographyPrefix, PrimitiveLiteral.fullCollectionLiteral);
     }
     export function geographyLineString(value: Utils.SourceArray, index: number): Lexer.Token {
         return PrimitiveLiteral.geoLiteralFactory(value, index, "Edm.GeographyLineString", Lexer.geographyPrefix, PrimitiveLiteral.fullLineStringLiteral);
@@ -651,15 +685,25 @@ export namespace PrimitiveLiteral {
         index = prefixNext;
 
         let squote = Lexer.SQUOTE(value, index);
-        if (!squote) return;
+        if (!squote) {
+            console.log("geoLiteralFactory missing squote at " + index);
+            return;
+        }
         index = squote;
 
         let data = literal(value, index);
-        if (!data) return;
+        if (!data) {
+            // console.log("geoLiteralFactory failed data match for " + type + " at " + index + " context: " + Utils.stringify(value, index, index + 20));
+            return;
+        }
+
         index = data.next;
 
         squote = Lexer.SQUOTE(value, index);
-        if (!squote) return;
+        if (!squote) {
+            console.log("geoLiteralFactory missing closing squote at " + index);
+            return;
+        }
         index = squote;
 
         return Lexer.tokenize(value, start, index, type, Lexer.TokenType.Literal);

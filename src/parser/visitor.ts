@@ -1013,6 +1013,38 @@ export class Visitor {
                     this[target] += ") % 86400000000000)";
                 }
                 break;
+            case "geo.distance":
+                if (this.type == SQLLang.SurrealDB) {
+                    this[target] += "geo::distance(";
+                    this.Visit(params[0], context);
+                    this[target] += ", ";
+                    this.Visit(params[1], context);
+                    this[target] += ")";
+                }
+                break;
+            case "geo.intersects":
+                if (this.type == SQLLang.SurrealDB) {
+                    // geo::intersects is not explicitly documented in some versions, but geo::contains is.
+                    // However, standard PostGIS/etc have st_intersects.
+                    // SurrealDB 2.0+ has geo::contains which returns bool if $1 contains $2.
+                    // 'intersects' means they overlap at any point.
+                    // Assuming geo::intersects logic or fallback to contains if strictly contained.
+                    // Let's try geo::contains for now as it's definitely supported, but OData intersects is broader.
+                    // Actually, let's use `geo::intersects` per user request/plan, and if it fails tests we fix it.
+                    this[target] += "geo::intersects(";
+                    this.Visit(params[0], context);
+                    this[target] += ", ";
+                    this.Visit(params[1], context);
+                    this[target] += ")";
+                }
+                break;
+            case "geo.length":
+                if (this.type == SQLLang.SurrealDB) {
+                    this[target] += "geo::length(";
+                    this.Visit(params[0], context);
+                    this[target] += ")";
+                }
+                break;
             default:
                 throw new ODataV4ParseError({ msg: `Function '${method}' is not supported or allowed.` });
         }

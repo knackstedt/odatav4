@@ -238,10 +238,21 @@ describe('Comprehensive OData V4 Test Suite', () => {
 
     describe('Filter Operations - Geo Functions', () => {
         const filter = (f: string) => parse(`$filter=${f}`).where;
-        // Skipping these as they likely rely on unhandled node types based on pattern
-        it.skip('geo.distance', () => expect(filter("geo.distance(Location, Point) lt 10")).toBeDefined());
-        it.skip('geo.length', () => expect(filter("geo.length(Line) gt 10")).toBeDefined());
-        it.skip('geo.intersects', () => expect(filter("geo.intersects(Location, Polygon)")).toBeDefined());
+
+        it('geo.distance', () => {
+            // Location -> $field1, Point(1 2) -> $literal2, 10 -> $literal3
+            expect(filter("geo.distance(Location, geography'Point(1 2)') lt 10")).toContain("geo::distance(type::field($field1), $literal2) < $literal3");
+        });
+
+        it('geo.intersects', () => {
+            // Location -> $field1, Polygon -> $literal2
+            expect(filter("geo.intersects(Location, geography'Polygon((0 0, 0 1, 1 1, 1 0, 0 0))')")).toContain("geo::intersects(type::field($field1), $literal2)");
+        });
+
+        it('geo.length', () => {
+            // Route -> $field1, 50 -> $literal2
+            expect(filter("geo.length(Route) gt 50")).toContain("geo::length(type::field($field1)) > $literal2");
+        });
     });
 
     describe('Lambda Operators', () => {
