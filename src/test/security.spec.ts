@@ -3,26 +3,137 @@ import { createQuery, SQLLang } from '../parser/main';
 import { renderQuery } from '../parser/query-renderer';
 import { ODataV4ParseError } from '../parser/utils';
 
-// Mock function to parse and render a query to SQL, returning the SQL string and parameters
-function getSurQL(query: string) {
+// ============================================================================
+// HELPER FUNCTIONS FOR MULTI-DIALECT TESTING
+// ============================================================================
+
+/**
+ * Parse and render a query for SurrealDB dialect
+ */
+function getSurQL(query: string, options = {}) {
     try {
-        const parsed = createQuery(query, { type: SQLLang.SurrealDB });
+        const parsed = createQuery(query, { type: SQLLang.SurrealDB, ...options });
         const result = renderQuery(parsed, 'test_table');
 
-        // Ensure we are working with string primitives for tests
         return {
             countQuery: result.countQuery.toString(),
             entriesQuery: result.entriesQuery.toString(),
             parameters: result.parameters
         };
     } catch (e: any) {
-        // console.log(e);
         if (e instanceof ODataV4ParseError || e.message?.includes('Parse error')) {
             throw e;
         }
         throw e;
     }
 }
+
+/**
+ * Get SQL for a specific dialect
+ */
+function getSQLForDialect(query: string, dialect: SQLLang, options = {}) {
+    try {
+        const parsed = createQuery(query, { type: dialect, ...options });
+        // For non-SurrealDB dialects, we'll use the visitor directly since renderQuery is SurrealDB-specific
+        if (dialect === SQLLang.SurrealDB) {
+            const result = renderQuery(parsed, 'test_table');
+            return {
+                where: parsed.where,
+                select: parsed.select,
+                orderby: parsed.orderby,
+                parameters: result.parameters,
+                fullQuery: result.entriesQuery.toString()
+            };
+        } else {
+            return {
+                where: parsed.where,
+                select: parsed.select,
+                orderby: parsed.orderby,
+                parameters: Object.fromEntries(parsed.parameters),
+                fullQuery: parsed.where // For non-SurrealDB we just check the where clause
+            };
+        }
+    } catch (e: any) {
+        if (e instanceof ODataV4ParseError || e.message?.includes('Parse error')) {
+            throw e;
+        }
+        throw e;
+    }
+}
+
+/**
+ * Test a payload against all SQL dialects
+ */
+function testAllDialects(query: string, options = {}) {
+    const dialects = [
+        SQLLang.SurrealDB,
+        SQLLang.ANSI,
+        SQLLang.MsSql,
+        SQLLang.MySql,
+        SQLLang.PostgreSql,
+        SQLLang.Oracle
+    ];
+
+    const results: Record<string, any> = {};
+
+    for (const dialect of dialects) {
+        try {
+            results[SQLLang[dialect]] = getSQLForDialect(query, dialect, options);
+        } catch (e) {
+            results[SQLLang[dialect]] = { error: e };
+        }
+    }
+
+    return results;
+}
+
+/**
+ * Verify that a payload is either rejected or safely parameterized
+ */
+const verifySecurity = (payload: string, forbiddenSubstring?: string) => {
+    const query = `$filter=Name eq '${payload}'`;
+    try {
+        const result = getSurQL(query);
+        // If it parses, it MUST be safely parameterized
+        expect(result.parameters['$literal1']).toBeDefined();
+
+        if (forbiddenSubstring) {
+            expect(result.entriesQuery).not.toContain(forbiddenSubstring);
+        }
+    } catch (e: any) {
+        // Parse errors are acceptable security outcomes
+        if (e instanceof ODataV4ParseError || e.message?.includes('Parse error')) {
+            return; // Pass
+        }
+        throw e;
+    }
+};
+
+/**
+ * Verify security across all dialects
+ */
+const verifySecurityAllDialects = (payload: string, forbiddenPatterns: string[] = []) => {
+    const query = `$filter=Name eq '${payload}'`;
+    const results = testAllDialects(query);
+
+    for (const [dialect, result] of Object.entries(results)) {
+        if (result.error) {
+            // Error is acceptable
+            expect(result.error instanceof ODataV4ParseError ||
+                result.error.message?.includes('Parse error')).toBe(true);
+        } else {
+            // Must be parameterized
+            expect(result.parameters).toBeDefined();
+
+            // Check that dangerous patterns aren't in the query
+            for (const pattern of forbiddenPatterns) {
+                if (result.fullQuery) {
+                    expect(result.fullQuery.toLowerCase()).not.toContain(pattern.toLowerCase());
+                }
+            }
+        }
+    }
+};
 
 describe('Security & SQL Injection Prevention Suite', () => {
 
