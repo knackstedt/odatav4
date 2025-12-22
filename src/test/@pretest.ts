@@ -27,6 +27,7 @@ beforeAll(async () => {
             password: 'root'
         }
     });
+    globalThis.db = db;
 
     const textData = readFileSync(__dirname + '/seed-data.json', 'utf-8');
     const data = JSON.parse(textData);

@@ -679,11 +679,33 @@ export class Visitor {
     }
 
     protected VisitFirstMemberExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value, context);
+        if (Array.isArray(node.value)) {
+            const [first, second] = node.value;
+            if (first.type === Lexer.TokenType.LambdaVariableExpression) {
+                // Implicit context for lambda variable, just visit the property path
+                this.Visit(second, context);
+            } else {
+                this.Visit(first, context);
+                const target = context?.target || 'where';
+                if (this.type == SQLLang.SurrealDB) this[target] += "->";
+                else this[target] += ".";
+                this.Visit(second, context);
+            }
+        } else {
+            this.Visit(node.value, context);
+        }
     }
 
     protected VisitMemberExpression(node: Lexer.Token, context: any) {
-        this.Visit(node.value, context);
+        if (node.value.name && node.value.value) {
+            this.Visit(node.value.name, context);
+            const target = context?.target || 'where';
+            if (this.type == SQLLang.SurrealDB) this[target] += "->";
+            else this[target] += ".";
+            this.Visit(node.value.value, context);
+        } else {
+            this.Visit(node.value, context);
+        }
     }
 
     protected VisitPropertyPathExpression(node: Lexer.Token, context: any) {
@@ -691,8 +713,12 @@ export class Visitor {
         if (node.value.current && node.value.next) {
             this.Visit(node.value.current, context);
             if (this.type == SQLLang.SurrealDB) {
-                // This is assumed to always be a graph relationship navigation.
-                this[target] += "->";
+                // Determine if we should append '->' (graph nav) or nothing (array filter/sub-selection)
+                const isCollectionPath = node.value.next.type === Lexer.TokenType.CollectionPathExpression;
+
+                if (!isCollectionPath) {
+                    this[target] += "->";
+                }
             }
             else {
                 context.identifier += ".";
@@ -787,6 +813,59 @@ export class Visitor {
             this[target] += name;
         }
         else this[target] += (context.literal = SQLLiteral.convert(node.value, node.raw));
+    }
+
+    protected VisitCollectionPathExpression(node: Lexer.Token, context: any) {
+        this.Visit(node.value, context);
+    }
+
+    protected VisitAnyExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+        const lambdaVar = node.value.variable;
+        const predicate = node.value.predicate;
+
+        if (this.type == SQLLang.SurrealDB) {
+            // "Comments/any(c:c/Score gt 5)" -> Comments[WHERE $this.Score > 5] != []
+            this[target] += "[WHERE ";
+            this.Visit(predicate, context);
+            this[target] += "] != []";
+        } else {
+            // Fallback or other SQL dialects
+            throw new ODataV4ParseError({ msg: `Lambda 'any' not implemented for this SQL dialect.` });
+        }
+    }
+
+    protected VisitAllExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+        const lambdaVar = node.value.variable;
+        const predicate = node.value.predicate;
+
+        if (this.type == SQLLang.SurrealDB) {
+            // "Comments/all(c:c/Score gt 5)" -> Comments[WHERE !($this.Score > 5)] = []
+            this[target] += "[WHERE !(";
+            this.Visit(predicate, context);
+            this[target] += ")] = []";
+        } else {
+            throw new ODataV4ParseError({ msg: `Lambda 'all' not implemented for this SQL dialect.` });
+        }
+    }
+
+    protected VisitLambdaVariableExpression(node: Lexer.Token, context: any) {
+        if (this.type == SQLLang.SurrealDB) {
+            const target = context?.target || 'where';
+            this[target] += "$this";
+        }
+    }
+
+    protected VisitLambdaPredicateExpression(node: Lexer.Token, context: any) {
+        this.Visit(node.value, context);
+    }
+
+    protected VisitImplicitVariableExpression(node: Lexer.Token, context: any) {
+        if (this.type == SQLLang.SurrealDB) {
+            const target = context?.target || 'where';
+            this[target] += "$this";
+        }
     }
 
     protected VisitMethodCallExpression(node: Lexer.Token, context: any) {

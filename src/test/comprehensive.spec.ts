@@ -258,11 +258,11 @@ describe('Comprehensive OData V4 Test Suite', () => {
     describe('Lambda Operators', () => {
         const filter = (f: string) => parse(`$filter=${f}`).where;
 
-        it.skip('any', () => {
+        it('any', () => {
             expect(filter("Comments/any(c:c/Comment eq 'Good')")).toBeDefined();
         });
 
-        it.skip('all', () => {
+        it('all', () => {
             expect(filter("Comments/all(c:c/Score gt 5)")).toBeDefined();
         });
     });
