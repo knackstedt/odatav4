@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createQuery } from "../parser/main";
-import { ODataV4ParseError } from "../parser/utils";
+import { createQuery } from "../../parser/main";
+import { ODataV4ParseError } from "../../parser/utils";
 
 describe("DoS Protection", () => {
 

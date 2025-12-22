@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { createQuery, SQLLang } from '../parser/main';
-import { ODataV4ParseError } from '../parser/utils';
+import { createQuery, SQLLang } from '../../parser/main';
+import { ODataV4ParseError } from '../../parser/utils';
 
 describe('Input Validation & Security Limits', () => {
 

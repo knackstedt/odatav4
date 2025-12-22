@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
-import { createQuery, SQLLang } from '../parser/main';
+import { createQuery, SQLLang } from '../../../parser/main';
 
 declare global {
     var db: any;

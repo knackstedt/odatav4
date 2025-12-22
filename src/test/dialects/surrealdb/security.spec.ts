@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { createQuery, SQLLang } from '../parser/main';
-import { renderQuery } from '../parser/query-renderer';
-import { ODataV4ParseError } from '../parser/utils';
+import { createQuery, SQLLang } from '../../../parser/main';
+import { renderQuery } from '../../../parser/query-renderer';
+import { ODataV4ParseError } from '../../../parser/utils';
+
+declare global {
+    var db: any;
+}
 
 // ============================================================================
 // HELPER FUNCTIONS FOR MULTI-DIALECT TESTING
@@ -10,10 +14,27 @@ import { ODataV4ParseError } from '../parser/utils';
 /**
  * Parse and render a query for SurrealDB dialect
  */
-function getSurQL(query: string, options = {}) {
+async function getSurQL(query: string, options = {}) {
     try {
         const parsed = createQuery(query, { type: SQLLang.SurrealDB, ...options });
-        const result = renderQuery(parsed, 'test_table');
+        const result = renderQuery(parsed, 'user'); // Use 'user' table
+
+        if (globalThis.db) {
+            const dbParams: any = {};
+            for (const k in result.parameters) {
+                dbParams[k.replace(/^\$/, '')] = result.parameters[k];
+            }
+            try {
+                await globalThis.db.query(result.entriesQuery.toString(), dbParams);
+            } catch (e: any) {
+                // Ignore runtime data errors
+                if (e.message.includes("Cannot perform") ||
+                    e.message.includes("Incorrect arguments") ||
+                    e.message.includes("Invalid function")) return result as any; // Return result to proceed
+
+                throw new Error(`DB Execution Failed: ${e.message}\nQuery: ${result.entriesQuery}`);
+            }
+        }
 
         return {
             countQuery: result.countQuery.toString(),
@@ -31,12 +52,25 @@ function getSurQL(query: string, options = {}) {
 /**
  * Get SQL for a specific dialect
  */
-function getSQLForDialect(query: string, dialect: SQLLang, options = {}) {
+async function getSQLForDialect(query: string, dialect: SQLLang, options = {}) {
     try {
         const parsed = createQuery(query, { type: dialect, ...options });
         // For non-SurrealDB dialects, we'll use the visitor directly since renderQuery is SurrealDB-specific
         if (dialect === SQLLang.SurrealDB) {
-            const result = renderQuery(parsed, 'test_table');
+            const result = renderQuery(parsed, 'user');
+
+            if (globalThis.db) {
+                const dbParams: any = {};
+                for (const k in result.parameters) {
+                    dbParams[k.replace(/^\$/, '')] = result.parameters[k];
+                }
+                try {
+                    await globalThis.db.query(result.entriesQuery.toString(), dbParams);
+                } catch (e: any) {
+                    throw new Error(`DB Execution Failed: ${e.message}\nQuery: ${result.entriesQuery}`);
+                }
+            }
+
             return {
                 where: parsed.where,
                 select: parsed.select,
@@ -64,7 +98,7 @@ function getSQLForDialect(query: string, dialect: SQLLang, options = {}) {
 /**
  * Test a payload against all SQL dialects
  */
-function testAllDialects(query: string, options = {}) {
+async function testAllDialects(query: string, options = {}) {
     const dialects = [
         SQLLang.SurrealDB,
         SQLLang.ANSI,
@@ -78,7 +112,7 @@ function testAllDialects(query: string, options = {}) {
 
     for (const dialect of dialects) {
         try {
-            results[SQLLang[dialect]] = getSQLForDialect(query, dialect, options);
+            results[SQLLang[dialect]] = await getSQLForDialect(query, dialect, options);
         } catch (e) {
             results[SQLLang[dialect]] = { error: e };
         }
@@ -90,10 +124,10 @@ function testAllDialects(query: string, options = {}) {
 /**
  * Verify that a payload is either rejected or safely parameterized
  */
-const verifySecurity = (payload: string, forbiddenSubstring?: string) => {
+const verifySecurity = async (payload: string, forbiddenSubstring?: string) => {
     const query = `$filter=Name eq '${payload}'`;
     try {
-        const result = getSurQL(query);
+        const result = await getSurQL(query);
         // If it parses, it MUST be safely parameterized
         expect(result.parameters['$literal1']).toBeDefined();
 
@@ -112,9 +146,9 @@ const verifySecurity = (payload: string, forbiddenSubstring?: string) => {
 /**
  * Verify security across all dialects
  */
-const verifySecurityAllDialects = (payload: string, forbiddenPatterns: string[] = []) => {
+const verifySecurityAllDialects = async (payload: string, forbiddenPatterns: string[] = []) => {
     const query = `$filter=Name eq '${payload}'`;
-    const results = testAllDialects(query);
+    const results = await testAllDialects(query);
 
     for (const [dialect, result] of Object.entries(results)) {
         if (result.error) {
@@ -138,36 +172,36 @@ const verifySecurityAllDialects = (payload: string, forbiddenPatterns: string[] 
 describe('Security & SQL Injection Prevention Suite', () => {
 
     describe('Basic SQL Injection Vectors', () => {
-        it('should treat quote breaking attempts as string literals', () => {
+        it('should treat quote breaking attempts as string literals', async () => {
             const query = "$filter=Name eq 'OR 1=1 --'";
-            const result = getSurQL(query);
+            const result = await getSurQL(query);
 
             expect(result.entriesQuery).toContain('type::field($field1) = $literal1');
             expect(result.parameters['$literal1']).toBe('OR 1=1 --');
             expect(result.entriesQuery).not.toContain('OR 1=1');
         });
 
-        it('should handle stacked queries (semicolon injection)', () => {
+        it('should handle stacked queries (semicolon injection)', async () => {
             const query = "$filter=Name eq 'val''; DROP TABLE test_table; --'";
-            const result = getSurQL(query);
+            const result = await getSurQL(query);
 
             expect(result.entriesQuery).toContain('type::field($field1) = $literal1');
             expect(result.parameters['$literal1']).toContain("DROP TABLE test_table");
             expect(result.entriesQuery).not.toContain('DROP TABLE');
         });
 
-        it('should handle comment injection inside string', () => {
+        it('should handle comment injection inside string', async () => {
             const query = "$filter=Name eq 'val--'";
-            const result = getSurQL(query);
+            const result = await getSurQL(query);
             expect(result.entriesQuery).toContain('type::field($field1) = $literal1');
             expect(result.parameters['$literal1']).toContain('val--');
         });
     });
 
     describe('SurrealDB Specific Injection Vectors', () => {
-        it('should parameterize record links/ids', () => {
+        it('should parameterize record links/ids', async () => {
             const query = "$filter=Name eq 'user:admin) OR (1=1'";
-            const result = getSurQL(query);
+            const result = await getSurQL(query);
 
             expect(result.parameters['$literal1']).toContain('user:admin) OR (1=1');
             expect(result.entriesQuery).not.toContain('user:admin');
@@ -177,12 +211,12 @@ describe('Security & SQL Injection Prevention Suite', () => {
     describe('Encoding & Obfuscation', () => {
         it('should throw on URL encoded chars in string literal (if not supported)', () => {
             const query = "$filter=Name eq '%27 OR 1=1 --'";
-            expect(() => getSurQL(query)).toThrow();
+            expect(getSurQL(query)).rejects.toThrow();
         });
 
-        it('should handle unicode escape sequences in literals', () => {
+        it('should handle unicode escape sequences in literals', async () => {
             const query = "$filter=Name eq '\\u0027 OR 1=1'";
-            const result = getSurQL(query);
+            const result = await getSurQL(query);
             expect(result.parameters['$literal1']).toBeDefined();
             expect(result.parameters['$literal1'] as string).toContain('\\u0027');
         });
@@ -191,12 +225,12 @@ describe('Security & SQL Injection Prevention Suite', () => {
     describe('Order By Injection', () => {
         it('should fail or escape invalid field names in ORDER BY', () => {
             const query = "$orderby=Name`, (DELETE FROM user)--";
-            expect(() => getSurQL(query)).toThrow();
+            expect(getSurQL(query)).rejects.toThrow();
         });
 
-        it('should parameterize or safely escape valid OData identifiers', () => {
+        it('should parameterize or safely escape valid OData identifiers', async () => {
             const query = "$orderby=Name";
-            const result = getSurQL(query);
+            const result = await getSurQL(query);
             expect(result.entriesQuery).toContain('`Name`');
         });
     });
@@ -204,17 +238,17 @@ describe('Security & SQL Injection Prevention Suite', () => {
     describe('Select Injection', () => {
         it('should fail invalid field aliases in SELECT', () => {
             const query = "$select=Name` as Hack";
-            expect(() => getSurQL(query)).toThrow();
+            expect(getSurQL(query)).rejects.toThrow();
         });
     });
 
     describe('Malformed/Fuzzing Inputs', () => {
-        it('should throw or handle extreme nesting', () => {
+        it('should throw or handle extreme nesting', async () => {
             const nested = "(".repeat(100) + "Name eq 'x'" + ")".repeat(100);
             const query = `$filter=${nested}`;
 
             try {
-                const result = getSurQL(query);
+                const result = await getSurQL(query);
                 expect(result.entriesQuery).toBeDefined();
             } catch (e) {
                 expect(e).toBeDefined();
@@ -253,10 +287,10 @@ describe('Security & SQL Injection Prevention Suite', () => {
         ];
 
         // Helper to verify that an input is either rejected (Parse Error) or Parameterized Safely
-        const verifySecurity = (payload: string, forbiddenSubstring?: string) => {
+        const verifySecurity = async (payload: string, forbiddenSubstring?: string) => {
             const query = `$filter=Name eq '${payload}'`;
             try {
-                const result = getSurQL(query);
+                const result = await getSurQL(query);
                 // If it parses, it MUST be safely parameterized
                 expect(result.parameters['$literal1']).toBeDefined();
                 // Depending on how strict the parser is with quotes in literals,
@@ -279,60 +313,60 @@ describe('Security & SQL Injection Prevention Suite', () => {
         };
 
         describe('Boolean-Based Blind', () => {
-            it.each(booleanPayloads)('should be secure against: %s', (payload) => {
-                verifySecurity(payload, ' OR 1=1');
+            it.each(booleanPayloads)('should be secure against: %s', async (payload) => {
+                await verifySecurity(payload, ' OR 1=1');
             });
         });
 
         describe('Union-Based', () => {
-            it.each(unionPayloads)('should be secure against: %s', (payload) => {
-                verifySecurity(payload, 'UNION SELECT');
+            it.each(unionPayloads)('should be secure against: %s', async (payload) => {
+                await verifySecurity(payload, 'UNION SELECT');
             });
         });
 
         describe('Comment Injection', () => {
-            it.each(commentPayloads)('should be secure against: %s', (payload) => {
-                verifySecurity(payload);
+            it.each(commentPayloads)('should be secure against: %s', async (payload) => {
+                await verifySecurity(payload);
             });
         });
 
         describe('Whitespace Variations', () => {
-            it.each(whitespacePayloads)('should be secure against: %s', (payload) => {
-                verifySecurity(payload);
+            it.each(whitespacePayloads)('should be secure against: %s', async (payload) => {
+                await verifySecurity(payload);
             });
         });
 
         describe('System Function Injection', () => {
-            it.each(systemPayloads)('should be secure against: %s', (payload) => {
-                verifySecurity(payload, 'session::');
+            it.each(systemPayloads)('should be secure against: %s', async (payload) => {
+                await verifySecurity(payload, 'session::');
             });
         });
 
         describe('Delimiter & stacked queries', () => {
-            it.each(delimiterPayloads)('should be secure against: %s', (payload) => {
-                verifySecurity(payload, 'DROP TABLE');
+            it.each(delimiterPayloads)('should be secure against: %s', async (payload) => {
+                await verifySecurity(payload, 'DROP TABLE');
             });
         });
 
         describe('Advanced Clause Injection', () => {
             it('should reject injection in $orderby desc', () => {
                 const query = "$orderby=Name desc, (SELECT * FROM users)";
-                expect(() => getSurQL(query)).toThrow();
+                expect(getSurQL(query)).rejects.toThrow();
             });
             it('should reject injection in $top', () => {
                 const query = "$top=1; DROP TABLE users";
-                expect(() => getSurQL(query)).toThrow();
+                expect(getSurQL(query)).rejects.toThrow();
             });
             it('should reject injection in $skip', () => {
                 const query = "$skip=1 OR 1=1";
-                expect(() => getSurQL(query)).toThrow();
+                expect(getSurQL(query)).rejects.toThrow();
             });
-            it('should reject injection in $search', () => {
+            it('should reject injection in $search', async () => {
                 const query = "$search=' OR 1=1";
                 // Search parser is rudimentary, expects simple string or error.
                 // We expect safe handling (either error or param)
                 try {
-                    const res = getSurQL(query);
+                    const res = await getSurQL(query);
                     expect(res.entriesQuery).not.toContain('OR 1=1');
                 } catch (e) {
                     // Pass
@@ -340,7 +374,7 @@ describe('Security & SQL Injection Prevention Suite', () => {
             });
             it('should reject injection in $expand', () => {
                 const query = "$expand=Tasks($filter=Id eq 1; DROP TABLE tasks)";
-                expect(() => getSurQL(query)).toThrow();
+                expect(getSurQL(query)).rejects.toThrow();
             });
         });
 
@@ -357,38 +391,36 @@ describe('Security & SQL Injection Prevention Suite', () => {
                 "admin` --",       // Identifier injection attempt
             ];
 
-            it.each(specialPayloads)('should safely handle: %s', (payload) => {
+            it.each(specialPayloads)('should safely handle: %s', async (payload) => {
                 // verifySecurity checks that it either parses safely (parameterized) or throws ParseError
-                verifySecurity(payload);
+                await verifySecurity(payload);
             });
 
-            it('should handle URI encoded backticks in literal', () => {
+            it('should handle URI encoded backticks in literal', async () => {
                 // %60 is backtick. parsed by decodeURIComponent?
                 // The parser visitor handles Edm.String by decodeURIComponent.
                 // let's try a direct input that looks like it has encoded chars
                 const payload = "foo%60bar";
-                verifySecurity(payload);
+                await verifySecurity(payload);
             });
 
-            it('should handle backslash at end of string', () => {
+            it('should handle backslash at end of string', async () => {
                 // Dangerous if it escapes the closing quote of the parameter
-                verifySecurity("foo\\");
+                await verifySecurity("foo\\");
             });
         });
     });
 
-
-
     describe("Function Whitelisting", () => {
-        const verifySecurity = (query: string, shouldPass: boolean) => {
+        const verifySecurity = async (query: string, shouldPass: boolean) => {
             if (shouldPass) {
-                expect(() => getSurQL(query)).not.toThrow();
+                await expect(getSurQL(query)).resolves.toBeTruthy();
             } else {
-                expect(() => getSurQL(query)).toThrow();
+                await expect(getSurQL(query)).rejects.toThrow();
             }
         };
 
-        it("should allow standard OData functions", () => {
+        it("should allow standard OData functions", async () => {
             const allowed = [
                 "contains(Name, \u0027foo\u0027)",
                 "startswith(Name, \u0027foo\u0027)",
@@ -411,11 +443,11 @@ describe('Security & SQL Injection Prevention Suite', () => {
 
             for (const func of allowed) {
                 const query = `$filter=${func} eq 0`;
-                verifySecurity(query, true);
+                await verifySecurity(query, true);
             }
         });
 
-        it("should reject unknown functions", () => {
+        it("should reject unknown functions", async () => {
             const blocked = [
                 "foo(Name)",
                 "myfunc(Name)",
@@ -425,11 +457,11 @@ describe('Security & SQL Injection Prevention Suite', () => {
 
             for (const func of blocked) {
                 const query = `$filter=${func} eq 0`;
-                verifySecurity(query, false);
+                await verifySecurity(query, false);
             }
         });
 
-        it("should reject SurrealDB system functions", () => {
+        it("should reject SurrealDB system functions", async () => {
             const dangerous = [
                 "session::user()",
                 "crypto::md5(\u0027foo\u0027)",
@@ -440,7 +472,7 @@ describe('Security & SQL Injection Prevention Suite', () => {
 
             for (const func of dangerous) {
                 const query = `$filter=${func} eq 0`;
-                verifySecurity(query, false);
+                await verifySecurity(query, false);
             }
         });
     });

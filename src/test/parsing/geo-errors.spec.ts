@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { createQuery, SQLLang } from '../parser/main';
+import { createQuery, SQLLang } from '../../parser/main';
 
 const parse = (input: string) => {
     return createQuery(input, { type: SQLLang.SurrealDB });

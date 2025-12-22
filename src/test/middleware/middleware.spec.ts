@@ -2,8 +2,8 @@ import { describe, expect, mock, test } from "bun:test";
 import express from "express";
 import request from "supertest";
 import { Surreal } from "surrealdb";
-import { ODataCRUDMethods, ODataV4ToSurrealQL, parseODataRequest, RunODataV4SelectFilter, SurrealODataV4Middleware } from "../express/odata-middleware";
-import { ODataExpressConfig, ODataExpressTable } from "../types";
+import { ODataCRUDMethods, ODataV4ToSurrealQL, parseODataRequest, RunODataV4SelectFilter, SurrealODataV4Middleware } from "../../express/odata-middleware";
+import { ODataExpressConfig, ODataExpressTable } from "../../types";
 
 describe("OData Middleware", () => {
     describe("parseODataRequest", () => {
