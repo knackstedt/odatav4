@@ -2,6 +2,62 @@ import * as express from 'express';
 import type { Surreal } from 'surrealdb';
 import { Visitor } from './parser/visitor';
 
+export type ODataGlobalHooks<T = any> = {
+    /**
+     * Hook that is called before record(s) are fetched (GET).
+     */
+    beforeRecordGet?: (req: express.Request) => Promise<void> | void;
+    /**
+     * Hook that is called after record(s) are fetched (GET).
+     */
+    afterRecordGet?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Hook that is called before record(s) are created (POST).
+     */
+    beforeRecordPost?: (req: express.Request, record: T) => Promise<T> | T;
+    /**
+     * Hook that is called after record(s) are created (POST).
+     */
+    afterRecordPost?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Hook that is called before record(s) are upserted (PUT).
+     */
+    beforeRecordPut?: (req: express.Request, record: T) => Promise<T> | T;
+    /**
+     * Hook that is called after record(s) are upserted (PUT).
+     */
+    afterRecordPut?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Hook that is called before record(s) are updated (PATCH).
+     */
+    beforeRecordPatch?: (req: express.Request, record: T) => Promise<T> | T;
+    /**
+     * Hook that is called after record(s) are updated (PATCH).
+     */
+    afterRecordPatch?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Hook that is called before record(s) are deleted (DELETE).
+     */
+    beforeRecordDelete?: (req: express.Request, record: T) => Promise<T> | T;
+    /**
+     * Hook that is called after record(s) are deleted (DELETE).
+     */
+    afterRecordDelete?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Hook that is called before any mutation (POST, PUT, PATCH, DELETE).
+     */
+    beforeRecordMutate?: (req: express.Request, record: T) => Promise<T> | T;
+    /**
+     * Hook that is called after record(s) are mutated (POST, PUT, PATCH, DELETE).
+     */
+    afterRecordMutate?: (req: express.Request, record: T) => Promise<T> | T;
+};
+
 export type ODataExpressHooks<T = Record<any, any>> = {
     selectQuery: (sql: string) => Promise<T[]>,
     verifyRecordId: (id: string) => boolean,
@@ -193,7 +249,8 @@ export type ODataExpressConfig = {
     /**
      * Global hooks that apply to all tables.
      */
-    // hooks?: ODataExpressHooks,
+    hooks?: ODataGlobalHooks;
+
     /**
      * Maximum page size for $top to prevent excessive data retrieval.
      * Default: 500
