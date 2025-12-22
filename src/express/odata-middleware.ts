@@ -282,7 +282,7 @@ export const RunODataV4SelectFilter = async (
 };
 
 
-const ODataCRUDMethods = async (
+export const ODataCRUDMethods = async (
     connection: Surreal,
     config: ODataExpressConfig,
     req: express.Request
@@ -290,7 +290,7 @@ const ODataCRUDMethods = async (
     let {
         tables,
         idGenerator,
-        // hooks
+        hooks
     } = config;
 
     const isBulk = Array.isArray(req.body);
@@ -304,7 +304,7 @@ const ODataCRUDMethods = async (
         [accessResult]: ReturnType<typeof checkObjectAccess>;
     }[] = isBulk ? req.body : [req.body];
 
-    if (req.method == "DELETE" && !req.body) {
+    if (req.method === "DELETE" && !req.body) {
         items = [{ id: req.path.split('/').pop() }] as any;
     }
 
@@ -319,13 +319,22 @@ const ODataCRUDMethods = async (
     items = await Promise.all(items.map(async item => {
         const { id, table, tableConfig } = checkObjectAccess(req, tables, item);
 
-        if (typeof tableConfig[beforeMethod] == "function") {
+        if (typeof hooks?.[beforeMethod] === "function") {
+            await hooks[beforeMethod](req, item);
+        }
+
+        if (typeof tableConfig[beforeMethod] === "function") {
             item = await tableConfig[beforeMethod](req, item);
         }
 
         // Support a generic mutate handler
-        if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && tableConfig.beforeRecordMutate) {
-            item = await tableConfig.beforeRecordMutate(req, item) as any;
+        if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+            if (typeof hooks?.beforeRecordMutate === "function") {
+                await hooks.beforeRecordMutate(req, item);
+            }
+            if (typeof tableConfig.beforeRecordMutate === "function") {
+                item = await tableConfig.beforeRecordMutate(req, item) as any;
+            }
         }
 
         item[accessResult] = {
@@ -342,7 +351,7 @@ const ODataCRUDMethods = async (
         const rid = id == null ? null : new RecordId(table, id);
 
         const variables = await (
-            typeof config.variables == 'function'
+            typeof config.variables === 'function'
                 ? config.variables(req, item)
                 : config.variables
         ) || [];
@@ -354,7 +363,7 @@ const ODataCRUDMethods = async (
         };
 
         let result;
-        if (req.method == "POST") {
+        if (req.method === "POST") {
             const newId = new RecordId(table, await idGenerator(item));
             delete item.id;
             const results = await db.query(`CREATE type::record($id) CONTENT $content`, {
@@ -365,7 +374,7 @@ const ODataCRUDMethods = async (
             const popped = results.pop();
             result = Array.isArray(popped) && popped.length > 0 ? popped[0] : null;
         }
-        else if (req.method == "PATCH") {
+        else if (req.method === "PATCH") {
             // if (!item.id) {
             //     throw { status: 400, message: "ID is required in body for PATCH" };
             // }
@@ -378,7 +387,7 @@ const ODataCRUDMethods = async (
             }).collect();
             result = results.pop()[0];
         }
-        else if (req.method == "PUT") {
+        else if (req.method === "PUT") {
             delete item.id;
             const results = await db.query(`UPSERT type::record($id) CONTENT $content`, {
                 id: rid,
@@ -387,7 +396,7 @@ const ODataCRUDMethods = async (
             }).collect();
             result = results.pop()[0];
         }
-        else if (req.method == "DELETE") {
+        else if (req.method === "DELETE") {
             const results = await db.query(`DELETE type::record($id)`, {
                 id: rid,
                 ...variables
@@ -412,12 +421,18 @@ const ODataCRUDMethods = async (
         } = r;
 
         if (req.method != "GET") {
-            if (typeof accessResult.tableConfig.afterRecordMutate == "function") {
+            if (typeof accessResult.tableConfig.afterRecordMutate === "function") {
                 await accessResult.tableConfig.afterRecordMutate(req, result);
             }
+            if (typeof hooks?.afterRecordMutate === "function") {
+                await hooks.afterRecordMutate(req, result);
+            }
         }
-        if (typeof accessResult.tableConfig[afterMethod] == "function") {
+        if (typeof accessResult.tableConfig[afterMethod] === "function") {
             await accessResult.tableConfig[afterMethod](req, result);
+        }
+        if (typeof hooks?.[afterMethod] === "function") {
+            await hooks[afterMethod](req, result);
         }
 
         return r;
@@ -452,6 +467,8 @@ export const SurrealODataV4Middleware = (
 ) => {
     const connection = config.resolveDb;
     const tables: (ODataExpressTable<any> & { _fields?: { type: string; }; })[] = config.tables;
+    const $odata = Symbol("odata");
+    const $db = Symbol("db");
 
     if (!connection) {
         throw new Error("No connection resolver specified");
@@ -462,11 +479,11 @@ export const SurrealODataV4Middleware = (
 
     router.use(route(async (req, res, next) => {
         try {
-            req['odata'] = parseODataRequest(req.url);
+            req[$odata] = parseODataRequest(req.url);
         } catch (e) {
             // Ignore parsing errors here, they will be caught later if needed
         }
-        req['db'] = connection instanceof Surreal ? connection : await connection(req);
+        req[$db] = connection instanceof Surreal ? connection : await connection(req);
         next();
     }));
 
@@ -474,7 +491,7 @@ export const SurrealODataV4Middleware = (
      * OData Metadata Endpoint
      */
     router.get('/$metadata#:table', route(async (req, res, next) => {
-        const db = req['db'] as Surreal;
+        const db = req[$db] as Surreal;
         const { tableConfig, table, id } = checkObjectAccess(req, tables);
 
         if (!tableConfig) {
@@ -488,7 +505,7 @@ export const SurrealODataV4Middleware = (
      * JSON Schema Endpoint
      */
     router.get('/$schema#:table', route(async (req, res, next) => {
-        const db = req['db'] as Surreal;
+        const db = req[$db] as Surreal;
         const { tableConfig, table, id } = checkObjectAccess(req, tables);
 
         if (!tableConfig) {
@@ -503,9 +520,13 @@ export const SurrealODataV4Middleware = (
      */
     router.use(route(async (req, res, next) => {
         if (req.method != "GET") return next();
-        const db = req['db'] as Surreal;
+        const db = req[$db] as Surreal;
 
         const { tableConfig, table, id } = checkObjectAccess(req, tables);
+
+        if (typeof config.hooks?.beforeRecordGet === "function") {
+            await config.hooks.beforeRecordGet(req);
+        }
 
         // If the target includes a colon, then we're acting on 1 record
         if (id) {
@@ -536,8 +557,11 @@ export const SurrealODataV4Middleware = (
                 return;
             }
 
-            if (typeof tableConfig.afterRecordGet == "function")
+            if (typeof tableConfig.afterRecordGet === "function")
                 result = await tableConfig.afterRecordGet(req, result);
+
+            if (typeof config.hooks?.afterRecordGet === "function")
+                result = await config.hooks.afterRecordGet(req, result);
 
             // Filter restricted fields based on user roles
             if (tableConfig.accessControl?.restrictedFields) {
@@ -564,9 +588,9 @@ export const SurrealODataV4Middleware = (
         let url = new URL(req.protocol + "://" + req.hostname + req.originalUrl);
 
         // Validate $orderby fields if allowedOrderByFields is configured
-        if (tableConfig.allowedOrderByFields && req['odata']?.orderby) {
+        if (tableConfig.allowedOrderByFields && req[$odata]?.orderby) {
             // Extract field names from orderby string
-            const orderbyFields = req['odata'].orderby
+            const orderbyFields = req[$odata].orderby
                 .split(',')
                 .map((f: string) => f.trim().split(/\s+/)[0]); // Get field name, strip ASC/DESC
 
@@ -600,16 +624,16 @@ export const SurrealODataV4Middleware = (
             }
 
             // Merge row-level filter with user's $filter
-            if (req['odata'].where) {
-                req['odata'].where = `(${req['odata'].where}) AND (${additionalWhere})`;
+            if (req[$odata].where) {
+                req[$odata].where = `(${req[$odata].where}) AND (${additionalWhere})`;
             }
             else {
-                req['odata'].where = additionalWhere;
+                req[$odata].where = additionalWhere;
             }
 
             // Merge parameters
             for (const [key, value] of Object.entries(additionalParams)) {
-                req['odata'].parameters.set(key, value);
+                req[$odata].parameters.set(key, value);
             }
         }
 
@@ -618,7 +642,7 @@ export const SurrealODataV4Middleware = (
             table,
             url.toString(),
             tableConfig.fetch,
-            req['odata'],
+            req[$odata],
             config
         );
 
@@ -633,6 +657,18 @@ export const SurrealODataV4Middleware = (
                 processedValues.push(...processedBatch);
             }
 
+            result.value = processedValues;
+        }
+
+        if (typeof config.hooks?.afterRecordGet === "function") {
+            const batchSize = 10;
+            const processedValues = [];
+
+            for (let i = 0; i < result.value.length; i += batchSize) {
+                const batch = result.value.slice(i, i + batchSize);
+                const processedBatch = await Promise.all(batch.map(v => config.hooks!.afterRecordGet!(req, v)));
+                processedValues.push(...processedBatch);
+            }
             result.value = processedValues;
         }
 
@@ -668,7 +704,7 @@ export const SurrealODataV4Middleware = (
      *
      */
     router.use(route(async (req, res, next) => {
-        const db = req['db'] as Surreal;
+        const db = req[$db] as Surreal;
 
         const result = await ODataCRUDMethods(db, config, req);
         res.send(Array.isArray(result) ? result.map(r => r.result) : result.result);

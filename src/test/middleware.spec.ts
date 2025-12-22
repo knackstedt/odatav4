@@ -1,6 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
+import express from "express";
+import request from "supertest";
 import { Surreal } from "surrealdb";
-import { ODataV4ToSurrealQL, parseODataRequest, RunODataV4SelectFilter } from "../express/odata-middleware";
+import { ODataCRUDMethods, ODataV4ToSurrealQL, parseODataRequest, RunODataV4SelectFilter, SurrealODataV4Middleware } from "../express/odata-middleware";
+import { ODataExpressConfig, ODataExpressTable } from "../types";
 
 describe("OData Middleware", () => {
     describe("parseODataRequest", () => {
@@ -163,4 +166,88 @@ describe("OData Middleware", () => {
     function params(parsed: any) {
         return Array.from(parsed.parameters?.values() || []);
     }
+});
+
+
+describe("Global Hooks", () => {
+    test("calls global beforeRecordGet and afterRecordGet on select", async () => {
+        const mockDb = new Surreal();
+        const queryMock = mock(() => {
+            return {
+                collect: async () => [[{ count: 1 }], [{ id: "table:1", val: "test" }]]
+            };
+        });
+        mockDb.query = queryMock as any;
+
+        const beforeGet = mock();
+        const afterGet = mock((req: any, res: any) => { return { ...res, modified: true }; });
+
+        const config: ODataExpressConfig = {
+            resolveDb: () => mockDb,
+            tables: [new ODataExpressTable({ table: "test" })],
+            hooks: {
+                beforeRecordGet: beforeGet,
+                afterRecordGet: afterGet
+            }
+        };
+
+        const app = express();
+        app.use("/test", SurrealODataV4Middleware(config));
+
+        // Mock session
+        app.use((req: any, res, next) => {
+            req.session = { profile: { roles: [] } };
+            next();
+        });
+
+        await request(app).get("/test/test");
+
+        expect(beforeGet).toHaveBeenCalled();
+        expect(afterGet).toHaveBeenCalled();
+        // Supertest response verification is cleaner, but mock check is enough for hooks.
+    });
+
+    test("calls global mutation hooks", async () => {
+        const mockDb = new Surreal();
+        mockDb.query = mock(() => {
+            return {
+                collect: async () => [[{ id: "table:1" }]] // Create return
+            };
+        }) as any;
+
+        const beforePost = mock();
+        const afterPost = mock();
+        const beforeMutate = mock();
+        const afterMutate = mock();
+
+        const config: ODataExpressConfig = {
+            resolveDb: () => mockDb,
+            tables: [new ODataExpressTable({ table: "test" })],
+            hooks: {
+                beforeRecordPost: beforePost,
+                afterRecordPost: afterPost,
+                beforeRecordMutate: beforeMutate,
+                afterRecordMutate: afterMutate
+            },
+            idGenerator: () => "1"
+        };
+
+
+        const req: any = {
+            method: "POST",
+            body: { val: "new" },
+            path: "/test",
+            originalUrl: "/test",
+            session: { profile: { roles: [] } } // Mock session for access check fallback
+        };
+
+        // Need to ensure checkObjectAccess passes.
+        // It parses req.originalUrl
+        await ODataCRUDMethods(mockDb, config, req);
+
+        expect(beforePost).toHaveBeenCalled();
+        expect(afterPost).toHaveBeenCalled();
+        expect(beforeMutate).toHaveBeenCalled();
+        expect(afterMutate).toHaveBeenCalled();
+    });
 });
