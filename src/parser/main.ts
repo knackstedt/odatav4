@@ -1,19 +1,9 @@
 import Lexer from './lexer';
 import { filter, query } from "./parser";
-import { SQLLang, Visitor } from "./visitor";
+import { MsSqlVisitor, MySqlVisitor, OracleVisitor, PostgreSqlVisitor, SQLLang, type SqlOptions, SurrealDbVisitor, Visitor } from "./visitors";
 
-export { SQLLang } from "./visitor";
-
-export interface SqlOptions {
-    useParameters?: boolean;
-    type?: SQLLang;
-    maxExpandDepth?: number;
-    maxExpandCount?: number;
-    maxPageSize?: number;
-    maxSkip?: number;
-    maxParameters?: number;
-    enableSearch?: boolean;
-}
+export { SQLLang } from "./visitors";
+export type { SqlOptions } from "./visitors";
 
 /**
  * Creates an SQL query descriptor from an OData query string
@@ -27,7 +17,31 @@ export function createQuery(odataQuery: string | Lexer.Token, options = <SqlOpti
     if (typeof type != "undefined" && type) options.type = type;
 
     let ast: Lexer.Token = (typeof odataQuery == "string" ? query(odataQuery) : odataQuery);
-    return new Visitor(options).Visit(ast).asType();
+
+    let visitor: Visitor;
+    switch (options.type) {
+        case SQLLang.SurrealDB:
+            visitor = new SurrealDbVisitor(options, ast);
+            break;
+        case SQLLang.MsSql:
+            visitor = new MsSqlVisitor(options, ast);
+            break;
+        case SQLLang.MySql:
+            visitor = new MySqlVisitor(options, ast);
+            break;
+        case SQLLang.PostgreSql:
+            visitor = new PostgreSqlVisitor(options, ast);
+            break;
+        case SQLLang.Oracle:
+            visitor = new OracleVisitor(options, ast);
+            break;
+        default:
+            visitor = new Visitor(options, ast);
+            break;
+    }
+
+    return visitor.Visit(ast);
+    // return this;
 }
 
 /**
@@ -41,7 +55,30 @@ export function createQuery(odataQuery: string | Lexer.Token, options = <SqlOpti
 export function createFilter(odataFilter: string | Lexer.Token, options = <SqlOptions>{}, type?: SQLLang): Visitor {
     if (typeof type != "undefined" && type) options.type = type;
     let ast: Lexer.Token = (typeof odataFilter == "string" ? filter(odataFilter) : odataFilter);
-    return new Visitor(options).Visit(ast).asType();
+
+    let visitor: Visitor;
+    switch (options.type) {
+        case SQLLang.SurrealDB:
+            visitor = new SurrealDbVisitor(options, ast);
+            break;
+        case SQLLang.MsSql:
+            visitor = new MsSqlVisitor(options, ast);
+            break;
+        case SQLLang.MySql:
+            visitor = new MySqlVisitor(options, ast);
+            break;
+        case SQLLang.PostgreSql:
+            visitor = new PostgreSqlVisitor(options, ast);
+            break;
+        case SQLLang.Oracle:
+            visitor = new OracleVisitor(options, ast);
+            break;
+        default:
+            visitor = new Visitor(options, ast);
+            break;
+    }
+
+    return visitor.Visit(ast);
 }
 
 
