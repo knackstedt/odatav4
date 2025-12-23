@@ -32,12 +32,13 @@ beforeAll(async () => {
     const textData = readFileSync(__dirname + '/seed-data.json', 'utf-8');
     const data = JSON.parse(textData);
 
-    for (const post of data.posts) { await db.create(new RecordId('post', post.id)).content({ ...post, id: undefined, userId: new RecordId('user', post.userId) }); }
+    for (const post of data.posts) { await db.create(new RecordId('post', post.id)).content({ ...post, id: undefined, userId: new RecordId('user', post.userId), numericId: post.id, numericUserId: post.userId }); }
     for (const comment of data.comments) { await db.create(new RecordId('comment', comment.id)).content({ ...comment, id: undefined, postId: new RecordId('post', comment.postId) }); }
     for (const user of data.users) {
         await db.create(new RecordId('user', user.id)).content({
             ...user,
             id: undefined,
+            numericId: user.id,
             // Additional fields for OData tests
             Name: user.name,
             Age: 25,

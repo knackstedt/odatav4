@@ -984,16 +984,17 @@ new ODataExpressTable<User>({
 
 ### Planned 🔄
 
-- `$expand`: Expand related entities (partial support)
-- Lambda operators: `any`, `all`
+- `$expand`: Nested expansions work (up to configured depth), but some combinations of nested filters need more testing.
 - Advanced string functions: `substring`, `concat`
-- Geo functions: `geo.distance`, `geo.intersects`
+- Geo functions: `geo.distance` (Implemented via `geo::distance`)
 - Type functions: `isof`, `cast`
 
 ### Not Supported ❌
 
-- `$apply`: Data aggregation (may be added on request)
-- `$compute`: Computed properties (may be added on request)
+- **Geo Functions**: `geo.intersects` (SurrealDB `geo::contains` does not fully match OData semantics), `geo.length` (No underlying SurrealDB function)
+- **Lambda Operators**: `any`, `all` (Not yet implemented in parser)
+- **Aggregation**: `$apply`, `$compute`
+- **Literals**: `$root`, `$it` literals
 
 ---
 

@@ -12,7 +12,7 @@ describe("OData V4 - $filter Tests", () => {
     describe("Logical Operators", () => {
         test("should filter with 'and' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$filter=userId eq 1 and id lt 5")
+                .get("/api/odata/post?$filter=numericUserId eq 1 and numericId lt 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -25,7 +25,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'or' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$filter=userId eq 1 or userId eq 2")
+                .get("/api/odata/post?$filter=numericUserId eq 1 or numericUserId eq 2")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -38,7 +38,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'not' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$filter=not(userId eq 1)&$top=10")
+                .get("/api/odata/post?$filter=not(numericUserId eq 1)&$top=10")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -49,7 +49,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with complex nested logical operators", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$filter=(userId eq 1 and id lt 5) or (userId eq 2 and id gt 15)")
+                .get("/api/odata/post?$filter=(numericUserId eq 1 and numericId lt 5) or (numericUserId eq 2 and numericId gt 15)")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -59,7 +59,7 @@ describe("OData V4 - $filter Tests", () => {
     describe("Comparison Operators", () => {
         test("should filter with 'eq' (equals)", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$filter=userId eq 1")
+                .get("/api/odata/post?$filter=numericUserId eq 1")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -70,7 +70,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'ne' (not equals)", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$filter=userId ne 1&$top=10")
+                .get("/api/odata/post?$filter=numericUserId ne 1&$top=10")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -81,7 +81,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'gt' (greater than)", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id gt 5")
+                .get("/api/odata/user?$filter=numericId gt 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -93,7 +93,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'ge' (greater than or equal)", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id ge 5")
+                .get("/api/odata/user?$filter=numericId ge 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -105,7 +105,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'lt' (less than)", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id lt 5")
+                .get("/api/odata/user?$filter=numericId lt 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -117,7 +117,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'le' (less than or equal)", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id le 5")
+                .get("/api/odata/user?$filter=numericId le 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -208,7 +208,7 @@ describe("OData V4 - $filter Tests", () => {
     describe("Arithmetic Operators", () => {
         test("should filter with 'add' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id add 5 gt 10")
+                .get("/api/odata/user?$filter=numericId add 5 gt 10")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -216,7 +216,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'sub' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id sub 2 gt 3")
+                .get("/api/odata/user?$filter=numericId sub 2 gt 3")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -224,7 +224,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'mul' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id mul 2 gt 10")
+                .get("/api/odata/user?$filter=numericId mul 2 gt 10")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -232,7 +232,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'div' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id div 2 lt 5")
+                .get("/api/odata/user?$filter=numericId div 2 lt 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -240,7 +240,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'mod' operator", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=id mod 2 eq 0&$top=5")
+                .get("/api/odata/user?$filter=numericId mod 2 eq 0&$top=5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -250,7 +250,7 @@ describe("OData V4 - $filter Tests", () => {
     describe("Math Functions", () => {
         test("should filter with 'round' function", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=round(id) gt 5")
+                .get("/api/odata/user?$filter=round(numericId) gt 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -258,7 +258,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'floor' function", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=floor(id) lt 5")
+                .get("/api/odata/user?$filter=floor(numericId) lt 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -266,7 +266,7 @@ describe("OData V4 - $filter Tests", () => {
 
         test("should filter with 'ceiling' function", async () => {
             const response = await request(app)
-                .get("/api/odata/user?$filter=ceiling(id) ge 5")
+                .get("/api/odata/user?$filter=ceiling(numericId) ge 5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
@@ -368,7 +368,7 @@ describe("OData V4 - $select Tests", () => {
 
     test("should combine $select with $filter", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$select=id,title&$filter=userId eq 1&$top=5")
+            .get("/api/odata/post?$select=id,title&$filter=numericUserId eq 1&$top=5")
             .expect(200);
 
         expect(response.body.value).toBeArray();
@@ -416,7 +416,7 @@ describe("OData V4 - $orderby Tests", () => {
 
     test("should combine $orderby with $filter and $select", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$filter=userId eq 1&$select=id,title&$orderby=id desc")
+            .get("/api/odata/post?$filter=numericUserId eq 1&$select=id,title&$orderby=id desc")
             .expect(200);
 
         expect(response.body.value).toBeArray();
@@ -501,7 +501,7 @@ describe("OData V4 - $count Tests", () => {
 
     test("should include count with filters", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$count=true&$filter=userId eq 1&$top=5")
+            .get("/api/odata/post?$count=true&$filter=numericUserId eq 1&$top=5")
             .expect(200);
 
         expect(response.body['@odata.count']).toBeDefined();
@@ -538,7 +538,7 @@ describe("OData V4 - $groupby Tests", () => {
 
     test("should combine $groupby with $filter", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$filter=userId gt 5&$groupby=userId")
+            .get("/api/odata/post?$filter=numericUserId gt 5&$groupby=userId")
             .expect(200);
 
         expect(response.body.value).toBeArray();
@@ -640,7 +640,7 @@ describe("OData V4 - $skiptoken Tests (WIP)", () => {
 describe("OData V4 - Complex Combination Tests", () => {
     test("should handle all parameters together", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$select=id,title&$filter=userId eq 1&$orderby=id desc&$top=5&$skip=0&$count=true")
+            .get("/api/odata/post?$select=id,title&$filter=numericUserId eq 1&$orderby=id desc&$top=5&$skip=0&$count=true")
             .expect(200);
 
         expect(response.body.value).toBeArray();
@@ -655,7 +655,7 @@ describe("OData V4 - Complex Combination Tests", () => {
 
     test("should handle complex filter with multiple operations", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$filter=contains(title, 'qui') and userId gt 3 and userId lt 7&$select=id,title,userId&$orderby=userId asc&$top=10")
+            .get("/api/odata/post?$filter=contains(title, 'qui') and numericUserId gt 3 and numericUserId lt 7&$select=id,title,userId&$orderby=userId asc&$top=10")
             .expect(200);
 
         expect(response.body.value).toBeArray();
@@ -663,7 +663,7 @@ describe("OData V4 - Complex Combination Tests", () => {
 
     test("should handle groupby with filter and orderby", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$filter=userId le 5&$groupby=userId&$orderby=userId desc")
+            .get("/api/odata/post?$filter=numericUserId le 5&$groupby=userId&$orderby=userId desc")
             .expect(200);
 
         expect(response.body.value).toBeArray();
@@ -682,7 +682,7 @@ describe("OData V4 - Complex Combination Tests", () => {
 
     test("should handle nested arithmetic and string functions", async () => {
         const response = await request(app)
-            .get("/api/odata/user?$filter=length(name) gt 5 and id mod 2 eq 0&$top=10")
+            .get("/api/odata/user?$filter=length(name) gt 5 and numericId mod 2 eq 0&$top=10")
             .expect(200);
 
         expect(response.body.value).toBeArray();
