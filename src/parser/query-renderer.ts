@@ -1,4 +1,4 @@
-import util from 'util';
+import * as util from 'util';
 import type { ParsedQuery } from "../types";
 import { Visitor } from "./visitor";
 
@@ -88,6 +88,7 @@ export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as str
     // There are some cases where select may be undefined.
     select ??= "*";
     parameters ??= new Map();
+    let selectIteration = 0;
 
     const doExpand = (node: Visitor, path = '') => {
         if (!node.includes) return;
@@ -95,10 +96,16 @@ export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as str
             const include = node.includes[i];
             path = path + include.navigationProperty;
 
-            select += ', ' + include.navigationProperty + '.' + include.select;
 
             include.parameters.forEach((value, key) => {
-                parameters.set(path + '.' + key, value);
+                if (key.startsWith("$select")) {
+                    const newKey = key.replace(/\$select\d+/, "$select_expanded_" + selectIteration++);
+                    include.select = include.select.replace(key, newKey);
+                    parameters.set(newKey, include.navigationProperty + '.' + value);
+                }
+                else {
+                    parameters.set(path + '.' + key, value);
+                }
             });
 
             doExpand(include, path + '.');
@@ -115,11 +122,24 @@ export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as str
 
             // Update: We need to ensure we don't double-add if it's already in select?
             // The original logic just appended.
-            select += ', ' + include.navigationProperty + '.' + include.select;
+            if (include.select === '*') {
+                include.select = include.navigationProperty + '.*';
+            }
 
             include.parameters.forEach((value, key) => {
-                parameters.set(path + '.' + key, value);
+                if (key.startsWith("$select")) {
+                    const newKey = key.replace(/\$select\d+/, "$select_expanded_" + selectIteration++);
+                    include.select = include.select.replace(key, newKey);
+                    parameters.set(newKey, include.navigationProperty + '.' + value);
+                }
+                else {
+                    parameters.set(path + '.' + key, value);
+                }
             });
+
+            select += ', ' + include.select
+                .replace(/type::field\(([^)]+)\)/g, (m, p) => include.parameters.get(p) || m)
+                .replace(/ AS `[^`]+`/g, '');
 
             doExpand(include, path + '.');
         }

@@ -19,8 +19,6 @@ const processFilter = async (filter: string) => {
         try {
             await globalThis.db.query(result.entriesQuery.toString(), dbParams);
         } catch (e: any) {
-            // Ignore runtime data errors like missing fields (NONE) involved in math
-            if (e.message.includes("Cannot perform")) return query.where;
             throw new Error(`DB Execution Failed: ${e.message}\nQuery: ${result.entriesQuery}`);
         }
     }

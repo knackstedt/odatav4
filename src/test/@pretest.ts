@@ -4,7 +4,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import express from 'express';
 import { readFileSync } from 'fs';
 import getPort from 'get-port';
-import { RecordId, Surreal } from 'surrealdb';
+import { GeometryLine, GeometryPoint, RecordId, Surreal } from 'surrealdb';
 import { SurrealODataV4Middleware } from '../express/odata-middleware';
 import { ODataExpressTable } from '../types';
 
@@ -34,7 +34,40 @@ beforeAll(async () => {
 
     for (const post of data.posts) { await db.create(new RecordId('post', post.id)).content({ ...post, id: undefined, userId: new RecordId('user', post.userId) }); }
     for (const comment of data.comments) { await db.create(new RecordId('comment', comment.id)).content({ ...comment, id: undefined, postId: new RecordId('post', comment.postId) }); }
-    for (const user of data.users) { await db.create(new RecordId('user', user.id)).content({ ...user, id: undefined }); }
+    for (const user of data.users) {
+        await db.create(new RecordId('user', user.id)).content({
+            ...user,
+            id: undefined,
+            // Additional fields for OData tests
+            Name: user.name,
+            Age: 25,
+            Price: 100,
+            BirthDate: new Date('1990-01-01T12:00:00.123Z'),
+            category: 'General',
+            created_at: new Date('2023-01-01T00:00:00Z'),
+            Friends: [new RecordId('user', (user.id % 10) + 1)],
+            Photos: [new RecordId('photo', (user.id % 10) + 1)],
+            Family: [new RecordId('user', (user.id % 10) + 1)],
+            Flags: '1',
+            // Lowercase and other fields for filter.spec.ts
+            value: 123,
+            notes: 100,
+            users: 10,
+            age: 25,
+            active: true,
+            status: 'premium',
+            subscribed: true,
+            price: 20,
+            Score: 12.34,
+            Location: new GeometryPoint([0, 0]),
+            Route: new GeometryLine([new GeometryPoint([0, 0]), new GeometryPoint([10, 10])]),
+            Comments: [{ Comment: 'Good', Score: 10 }, { Comment: 'Bad', Score: 2 }],
+            Date: new Date('2020-01-01T00:00:00Z'),
+            Email: 'test@example.com',
+            FirstName: 'John',
+            LastName: 'Doe'
+        });
+    }
     for (const album of data.albums) { await db.create(new RecordId('album', album.id)).content({ ...album, id: undefined, userId: new RecordId('user', album.userId) }); }
     for (const todo of data.todos) { await db.create(new RecordId('todo', todo.id)).content({ ...todo, id: undefined, userId: new RecordId('user', todo.userId) }); }
     for (const photo of data.photos) { await db.create(new RecordId('photo', photo.id)).content({ ...photo, id: undefined, albumId: new RecordId('album', photo.albumId) }); }

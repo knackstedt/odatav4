@@ -40,15 +40,6 @@ const parse = async (input: string) => {
         try {
             await globalThis.db.query(sql, dbParams);
         } catch (e: any) {
-            // Ignore runtime errors related to missing data or functions
-            if (e.message.includes("Cannot perform") ||
-                e.message.includes("Cannot negate") ||
-                e.message.includes("Incorrect arguments") ||
-                e.message.includes("Invalid function") ||
-                e.message.includes("Exist") ||
-                e.message.includes("not found") ||
-                e.message.includes("Parse error")) return query;
-
             throw new Error(`DB Execution Failed: ${e.message}\nQuery: ${sql}`);
         }
     }
@@ -102,10 +93,12 @@ describe('Comprehensive OData $expand Test Suite', () => {
         });
 
         it('$select inside $expand', async () => {
-            const result = await parse('$expand=Friends($select=Name,Age)');
+            const result = await parse('$expand=Friends($select=Name,Age),Shipper($select=Name)');
             const friends = result.includes[0];
-            expect(friends.select).toContain('type::field($select0)');
-            expect(friends.select).toContain('type::field($select1)');
+            const shipper = result.includes[1];
+            expect(friends.select).toContain('type::field($select_expanded_0) AS `Name`');
+            expect(friends.select).toContain('type::field($select_expanded_1) AS `Age`');
+            expect(shipper.select).toContain('type::field($select_expanded_2) AS `Name`');
         });
 
         it('$orderby inside $expand', async () => {

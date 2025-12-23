@@ -24,16 +24,6 @@ async function getSurQL(query: string, options = {}) {
             try {
                 await globalThis.db.query(result.entriesQuery.toString(), dbParams);
             } catch (e: any) {
-                // Ignore runtime data errors
-                if (e.message.includes("Cannot perform") ||
-                    e.message.includes("Incorrect arguments") ||
-                    e.message.includes("Invalid function")) return {
-                        countQuery: result.countQuery.toString(),
-                        entriesQuery: result.entriesQuery.toString(),
-                        parameters: result.parameters,
-                        where: parsed.where
-                    };
-
                 // Contextualize error
                 throw new Error(`DB Execution Failed: ${e.message}\nQuery: ${result.entriesQuery}`);
             }

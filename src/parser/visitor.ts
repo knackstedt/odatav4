@@ -808,6 +808,22 @@ export class Visitor {
             let name = `$literal${this.parameterSeed++}`;
             let value = Literal.convert(node.value, node.raw);
 
+            if (this.type == SQLLang.SurrealDB && node.value === 'Edm.GeographyPoint') {
+                const match = node.raw.match(/'Point\(([^)]+)\)'/);
+                if (match) {
+                    const [x, y] = match[1].split(' ').map(Number);
+                    this[target] += `(${x}, ${y})`;
+                    return;
+                }
+            }
+            if (this.type == SQLLang.SurrealDB && node.value === 'Edm.GeographyPolygon') {
+                const match = node.raw.match(/'Polygon\(\(([^)]+)\)\)'/);
+                if (match) {
+                    const points = match[1].split(',').map(p => p.trim().split(' ').map(Number));
+                    value = { type: 'Polygon', coordinates: [points] };
+                }
+            }
+
             context.literal = value;
             this.parameters.set(name, value);
             this[target] += name;
@@ -1071,7 +1087,7 @@ export class Visitor {
             case "fractionalseconds":
                 // Extract sub-second precision (nanoseconds) and convert to fractional seconds
                 if (this.type == SQLLang.SurrealDB) {
-                    this[target] += "(time::nanos(";
+                    this[target] += "(time::nano(";
                     this.Visit(params[0], context);
                     this[target] += ") % 1000000000 / 1000000000.0)";
                 }
@@ -1087,7 +1103,7 @@ export class Visitor {
             case "time":
                 // Extract just the time component (duration since midnight in nanoseconds)
                 if (this.type == SQLLang.SurrealDB) {
-                    this[target] += "(time::nanos(";
+                    this[target] += "(time::nano(";
                     this.Visit(params[0], context);
                     this[target] += ") % 86400000000000)";
                 }
@@ -1103,13 +1119,6 @@ export class Visitor {
                 break;
             case "geo.intersects":
                 if (this.type == SQLLang.SurrealDB) {
-                    // geo::intersects is not explicitly documented in some versions, but geo::contains is.
-                    // However, standard PostGIS/etc have st_intersects.
-                    // SurrealDB 2.0+ has geo::contains which returns bool if $1 contains $2.
-                    // 'intersects' means they overlap at any point.
-                    // Assuming geo::intersects logic or fallback to contains if strictly contained.
-                    // Let's try geo::contains for now as it's definitely supported, but OData intersects is broader.
-                    // Actually, let's use `geo::intersects` per user request/plan, and if it fails tests we fix it.
                     this[target] += "geo::intersects(";
                     this.Visit(params[0], context);
                     this[target] += ", ";
