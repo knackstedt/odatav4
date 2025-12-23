@@ -32,7 +32,7 @@ export enum SQLLang {
 }
 
 export class Visitor {
-    protected options: SqlOptions;
+    private options: SqlOptions;
     type: SQLLang;
 
     select = "";
@@ -50,11 +50,15 @@ export class Visitor {
     navigationProperty: string;
     includes: Visitor[] = [];
     parameters = new Map<string, any>();
-    protected parameterSeed: number = 0;
-    protected fieldSeed: number = 0;
-    protected selectSeed: number = 0;
-    protected originalWhere: string;
+    expandDepth: number = 0;
+    // Implemented as an object in order to pass by reference.
+    expandCounter: { count: number; };
     ast: Lexer.Token;
+
+    private parameterSeed: number = 0;
+    private fieldSeed: number = 0;
+    private selectSeed: number = 0;
+    private originalWhere: string;
 
     constructor(options = <SqlOptions>{}) {
         this.options = options;
@@ -70,10 +74,9 @@ export class Visitor {
         this.expandCounter = { count: 0 };
     }
 
-    expandDepth: number = 0;
-    expandCounter: { count: number; };
 
-    protected getFetchPaths(includes: Visitor[], parentPath: string = ""): string[] {
+
+    private getFetchPaths(includes: Visitor[], parentPath: string = ""): string[] {
         const paths: string[] = [];
         for (const include of includes) {
             if (!include.navigationProperty) continue;
@@ -86,7 +89,7 @@ export class Visitor {
         return paths;
     }
 
-    getBaseQuery(table: string) {
+    private getBaseQuery(table: string) {
         switch (this.options.type) {
             case SQLLang.SurrealDB: {
                 this.parameters.set("table", table);
@@ -103,7 +106,7 @@ export class Visitor {
         }
     }
 
-    protected isId(p: any): boolean {
+    private isId(p: any): boolean {
         if (!p) return false;
         if (p.type == Lexer.TokenType.ODataIdentifier) {
             return p.value?.name == 'id' || p.value?.name?.endsWith('Id');
@@ -114,7 +117,7 @@ export class Visitor {
         return false;
     }
 
-    protected checkParameterLimit() {
+    private checkParameterLimit() {
         const maxParams = this.options.maxParameters ?? 1000;
         if (this.parameterSeed >= maxParams) {
             throw new ODataV4ParseError({
@@ -123,7 +126,120 @@ export class Visitor {
         }
     }
 
-    protected VisitComparisonExpression(node: Lexer.Token, context: any, operator: string) {
+    private from(table: string) {
+        let sql = this.getBaseQuery(table);
+
+        // Ensure that skip and limit are either undefined or are numbers.
+        // TODO: Should we have special handling for 0 / -1?
+        if (this.limit && typeof this.limit != "number") {
+            throw new ODataV4ParseError({ msg: "Pagination property $limit is malformed." });
+        }
+        if (this.skip && typeof this.skip != "number") {
+            throw new ODataV4ParseError({ msg: "Pagination property $skip is malformed." });
+        }
+
+        switch (this.type) {
+            case SQLLang.Oracle:
+            case SQLLang.MsSql:
+                if (typeof this.skip == "number") sql += ` OFFSET ${this.skip} ROWS`;
+                if (typeof this.limit == "number") {
+                    if (typeof this.skip != "number") sql += " OFFSET 0 ROWS";
+                    sql += ` FETCH NEXT ${this.limit} ROWS ONLY`;
+                }
+                break;
+            case SQLLang.SurrealDB:
+                if (typeof this.limit == "number") sql += ` LIMIT ${this.limit}`;
+                if (typeof this.skip == "number") sql += ` START ${this.skip}`;
+                if (this.includes.length > 0) {
+                    const paths = this.getFetchPaths(this.includes);
+                    if (paths.length > 0) sql += ` FETCH ${paths.join(", ")}`;
+                }
+                break;
+            case SQLLang.MySql:
+            case SQLLang.PostgreSql:
+            default:
+                if (typeof this.limit == "number") sql += ` LIMIT ${this.limit}`;
+                if (typeof this.skip == "number") sql += ` OFFSET ${this.skip}`;
+                break;
+        }
+        return sql;
+    }
+
+    private asMsSql() {
+        this.type = SQLLang.MsSql;
+        let rx = new RegExp("\\?", "g");
+        let keys = this.parameters.keys();
+        this.originalWhere = this.where;
+        this.where = this.where.replace(rx, () => `@${keys.next().value}`);
+        this.includes.forEach((item) => item.asMsSql());
+        return this;
+    }
+
+    private asSurrealDb() {
+        this.type = SQLLang.SurrealDB;
+        this.originalWhere = this.where;
+        this.includes.forEach((item) => item.asSurrealDb());
+
+        return this;
+    }
+
+    private asOracleSql() {
+        this.type = SQLLang.Oracle;
+        let rx = new RegExp("\\?", "g");
+        let keys = this.parameters.keys();
+        this.originalWhere = this.where;
+        this.where = this.where.replace(rx, () => `:${keys.next().value}`);
+        this.includes.forEach((item) => item.asOracleSql());
+        return this;
+    }
+
+    private asAnsiSql() {
+        this.type = SQLLang.ANSI;
+        this.where = this.originalWhere || this.where;
+        this.includes.forEach((item) => item.asAnsiSql());
+        return this;
+    }
+
+    asType() {
+        switch (this.type) {
+            case SQLLang.MsSql: return this.asMsSql();
+            case SQLLang.ANSI:
+            case SQLLang.MySql:
+            case SQLLang.PostgreSql: return this.asAnsiSql();
+            case SQLLang.Oracle: return this.asOracleSql();
+            case SQLLang.SurrealDB: return this.asSurrealDb();
+            default: return this;
+        }
+    }
+
+    Visit(node: Lexer.Token, context?: any) {
+        this.ast = this.ast || node;
+        context = context || { target: "where" };
+
+        if (node) {
+            const visitor = this[`Visit${node.type}`];
+            if (!visitor) {
+                throw new ODataV4ParseError({ msg: `Unhandled node type: ${node.type}`, props: { node } });
+            }
+            visitor.call(this, node, context);
+        }
+
+        // Why is this needed?
+        if (node == this.ast) {
+            this.select ||= `*`;
+            this.where ||= "1 = 1";
+            this.orderby ||= "1";
+            this.groupby ||= "";
+        }
+        return this;
+    }
+
+    private VisitODataUri(node: Lexer.Token, context: any) {
+        this.Visit(node.value.resource, context);
+        this.Visit(node.value.query, context);
+    }
+
+    private VisitComparisonExpression(node: Lexer.Token, context: any, operator: string) {
         if (this.type == SQLLang.SurrealDB) {
             const left = node.value.left;
             const right = node.value.right;
@@ -178,120 +294,7 @@ export class Visitor {
         this.Visit(node.value.right, context);
     }
 
-    from(table: string) {
-        let sql = this.getBaseQuery(table);
-
-        // Ensure that skip and limit are either undefined or are numbers.
-        // TODO: Should we have special handling for 0 / -1?
-        if (this.limit && typeof this.limit != "number") {
-            throw new ODataV4ParseError({ msg: "Pagination property $limit is malformed." });
-        }
-        if (this.skip && typeof this.skip != "number") {
-            throw new ODataV4ParseError({ msg: "Pagination property $skip is malformed." });
-        }
-
-        switch (this.type) {
-            case SQLLang.Oracle:
-            case SQLLang.MsSql:
-                if (typeof this.skip == "number") sql += ` OFFSET ${this.skip} ROWS`;
-                if (typeof this.limit == "number") {
-                    if (typeof this.skip != "number") sql += " OFFSET 0 ROWS";
-                    sql += ` FETCH NEXT ${this.limit} ROWS ONLY`;
-                }
-                break;
-            case SQLLang.SurrealDB:
-                if (typeof this.limit == "number") sql += ` LIMIT ${this.limit}`;
-                if (typeof this.skip == "number") sql += ` START ${this.skip}`;
-                if (this.includes.length > 0) {
-                    const paths = this.getFetchPaths(this.includes);
-                    if (paths.length > 0) sql += ` FETCH ${paths.join(", ")}`;
-                }
-                break;
-            case SQLLang.MySql:
-            case SQLLang.PostgreSql:
-            default:
-                if (typeof this.limit == "number") sql += ` LIMIT ${this.limit}`;
-                if (typeof this.skip == "number") sql += ` OFFSET ${this.skip}`;
-                break;
-        }
-        return sql;
-    }
-
-    asMsSql() {
-        this.type = SQLLang.MsSql;
-        let rx = new RegExp("\\?", "g");
-        let keys = this.parameters.keys();
-        this.originalWhere = this.where;
-        this.where = this.where.replace(rx, () => `@${keys.next().value}`);
-        this.includes.forEach((item) => item.asMsSql());
-        return this;
-    }
-
-    asSurrealDb() {
-        this.type = SQLLang.SurrealDB;
-        this.originalWhere = this.where;
-        this.includes.forEach((item) => item.asSurrealDb());
-
-        return this;
-    }
-
-    asOracleSql() {
-        this.type = SQLLang.Oracle;
-        let rx = new RegExp("\\?", "g");
-        let keys = this.parameters.keys();
-        this.originalWhere = this.where;
-        this.where = this.where.replace(rx, () => `:${keys.next().value}`);
-        this.includes.forEach((item) => item.asOracleSql());
-        return this;
-    }
-
-    asAnsiSql() {
-        this.type = SQLLang.ANSI;
-        this.where = this.originalWhere || this.where;
-        this.includes.forEach((item) => item.asAnsiSql());
-        return this;
-    }
-
-    asType() {
-        switch (this.type) {
-            case SQLLang.MsSql: return this.asMsSql();
-            case SQLLang.ANSI:
-            case SQLLang.MySql:
-            case SQLLang.PostgreSql: return this.asAnsiSql();
-            case SQLLang.Oracle: return this.asOracleSql();
-            case SQLLang.SurrealDB: return this.asSurrealDb();
-            default: return this;
-        }
-    }
-
-    Visit(node: Lexer.Token, context?: any) {
-        this.ast = this.ast || node;
-        context = context || { target: "where" };
-
-        if (node) {
-            const visitor = this[`Visit${node.type}`];
-            if (!visitor) {
-                throw new ODataV4ParseError({ msg: `Unhandled node type: ${node.type}`, props: { node } });
-            }
-            visitor.call(this, node, context);
-        }
-
-        // Why is this needed?
-        if (node == this.ast) {
-            this.select ||= `*`;
-            this.where ||= "1 = 1";
-            this.orderby ||= "1";
-            this.groupby ||= "";
-        }
-        return this;
-    }
-
-    protected VisitODataUri(node: Lexer.Token, context: any) {
-        this.Visit(node.value.resource, context);
-        this.Visit(node.value.query, context);
-    }
-
-    protected VisitExpand(node: Lexer.Token, context: any) {
+    private VisitExpand(node: Lexer.Token, context: any) {
         const maxDepth = this.options.maxExpandDepth ?? 5;
         const maxCount = this.options.maxExpandCount ?? 10;
 
@@ -320,16 +323,16 @@ export class Visitor {
         });
     }
 
-    protected VisitExpandItem(node: Lexer.Token, context: any) {
+    private VisitExpandItem(node: Lexer.Token, context: any) {
         this.Visit(node.value.path, context);
         if (node.value.options) node.value.options.forEach((item) => this.Visit(item, context));
     }
 
-    protected VisitExpandPath(node: Lexer.Token, context: any) {
+    private VisitExpandPath(node: Lexer.Token, context: any) {
         this.navigationProperty = node.raw;
     }
 
-    protected VisitQueryOptions(node: Lexer.Token, context: any) {
+    private VisitQueryOptions(node: Lexer.Token, context: any) {
         node.value.options.forEach((option) => {
             // Create a fresh context for each option to prevent one option from affecting others
             const optionContext = { ...context };
@@ -337,25 +340,25 @@ export class Visitor {
         });
     }
 
-    protected VisitInlineCount(node: Lexer.Token, context: any) {
+    private VisitInlineCount(node: Lexer.Token, context: any) {
         this.inlinecount = Literal.convert(node.value.value, node.value.raw);
     }
 
-    protected VisitFilter(node: Lexer.Token, context: any) {
+    private VisitFilter(node: Lexer.Token, context: any) {
         context.target = "where";
         this.Visit(node.value, context);
         this.where ||= "1 = 1";
     }
 
-    protected VisitFormat(node: Lexer.Token, context: any) {
+    private VisitFormat(node: Lexer.Token, context: any) {
         this.format = node.value.format;
     }
 
-    protected VisitSkipToken(node: Lexer.Token, context: any) {
+    private VisitSkipToken(node: Lexer.Token, context: any) {
         this.skipToken = node.value;
     }
 
-    protected VisitSearch(node: Lexer.Token, context: any) {
+    private VisitSearch(node: Lexer.Token, context: any) {
         if (!this.options.enableSearch) {
             throw new ODataV4ParseError({
                 msg: "$search is disabled."
@@ -369,11 +372,11 @@ export class Visitor {
         // VisitSearchNotExpression;
     }
 
-    protected VisitId(node: Lexer.Token, context: any) {
+    private VisitId(node: Lexer.Token, context: any) {
         this.specificId = node.value;
     }
 
-    protected VisitOrderBy(node: Lexer.Token, context: any) {
+    private VisitOrderBy(node: Lexer.Token, context: any) {
         context.target = "orderby";
         node.value.items.forEach((item, i) => {
             this.Visit(item, context);
@@ -381,12 +384,12 @@ export class Visitor {
         });
     }
 
-    protected VisitOrderByItem(node: Lexer.Token, context: any) {
+    private VisitOrderByItem(node: Lexer.Token, context: any) {
         this.Visit(node.value.expr, context);
         this.orderby += node.value.direction > 0 ? " ASC" : " DESC";
     }
 
-    protected VisitSkip(node: Lexer.Token, context: any) {
+    private VisitSkip(node: Lexer.Token, context: any) {
         const value = +node.value.raw;
         if (value < 0) {
             throw new ODataV4ParseError({
@@ -402,7 +405,7 @@ export class Visitor {
         this.skip = value;
     }
 
-    protected VisitTop(node: Lexer.Token, context: any) {
+    private VisitTop(node: Lexer.Token, context: any) {
         const value = +node.value.raw;
         const maxPageSize = this.options.maxPageSize ?? 500;
         if (value > maxPageSize) {
@@ -413,7 +416,7 @@ export class Visitor {
         this.limit = value;
     }
 
-    protected VisitGroupBy(node: Lexer.Token, context: any) {
+    private VisitGroupBy(node: Lexer.Token, context: any) {
         context.target = "groupby";
         node.value.items.forEach((item, i) => {
             this.Visit(item, context);
@@ -421,7 +424,7 @@ export class Visitor {
         });
     }
 
-    protected VisitGroupByItem(node: Lexer.Token, context: any) {
+    private VisitGroupByItem(node: Lexer.Token, context: any) {
         // For SurrealDB, use backticks like orderby
         if (this.type == SQLLang.SurrealDB) {
             this.groupby += '`' + node.value.expr.raw.replace(/`/g, '\\`') + '`';
@@ -431,7 +434,7 @@ export class Visitor {
         }
     }
 
-    protected VisitSelect(node: Lexer.Token, context: any) {
+    private VisitSelect(node: Lexer.Token, context: any) {
         context.target = "select";
         node.value.items.forEach((item, i) => {
             this.Visit(item, context);
@@ -439,7 +442,7 @@ export class Visitor {
         });
     }
 
-    protected VisitSelectItem(node: Lexer.Token, context: any) {
+    private VisitSelectItem(node: Lexer.Token, context: any) {
         // Check if this is a wildcard select - don't parameterize it
         if (node.raw === '*') {
             this.select += '*';
@@ -457,7 +460,7 @@ export class Visitor {
         }
     }
 
-    protected VisitAndExpression(node: Lexer.Token, context: any) {
+    private VisitAndExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
             const target = context?.target || 'where';
             this[target] += "(";
@@ -473,7 +476,7 @@ export class Visitor {
         }
     }
 
-    protected VisitOrExpression(node: Lexer.Token, context: any) {
+    private VisitOrExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
             const target = context?.target || 'where';
             this[target] += "(";
@@ -489,7 +492,7 @@ export class Visitor {
         }
     }
 
-    protected VisitNotExpression(node: Lexer.Token, context: any) {
+    private VisitNotExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (this.type == SQLLang.SurrealDB) {
             this[target] += "!(";
@@ -501,7 +504,7 @@ export class Visitor {
         }
     }
 
-    protected VisitInExpression(node: Lexer.Token, context: any) {
+    private VisitInExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
             this.Visit(node.value.left, context);
             this.where += " in [";
@@ -531,21 +534,21 @@ export class Visitor {
         }
     }
 
-    protected VisitBoolParenExpression(node: Lexer.Token, context: any) {
+    private VisitBoolParenExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         this[target] += "(";
         this.Visit(node.value, context);
         this[target] += ")";
     }
 
-    protected VisitNegateExpression(node: Lexer.Token, context: any) {
+    private VisitNegateExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         this[target] += "-(";
         this.Visit(node.value, context);
         this[target] += ")";
     }
 
-    protected VisitHasExpression(node: Lexer.Token, context: any) {
+    private VisitHasExpression(node: Lexer.Token, context: any) {
         // OData 'has' is for bitwise flags/enums
         // SurrealDB doesn't have direct bitwise AND, but we can check array membership
         // For now, implement as array contains check
@@ -556,7 +559,7 @@ export class Visitor {
         this.Visit(node.value.right, context);
     }
 
-    protected VisitIsOfExpression(node: Lexer.Token, context: any) {
+    private VisitIsOfExpression(node: Lexer.Token, context: any) {
         // isof() checks if expression is of specified type
         // Map to SurrealDB type::is::* functions
         const target = context?.target || 'where';
@@ -581,7 +584,7 @@ export class Visitor {
         this[target] += ")";
     }
 
-    protected VisitCastExpression(node: Lexer.Token, context: any) {
+    private VisitCastExpression(node: Lexer.Token, context: any) {
         // cast() converts expression to specified type
         const target = context?.target || 'where';
         const typeName = node.value.right?.value || node.value.right?.raw;
@@ -604,14 +607,14 @@ export class Visitor {
         this[target] += ")";
     }
 
-    protected VisitParenExpression(node: Lexer.Token, context: any) {
+    private VisitParenExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         this[target] += "(";
         this.Visit(node.value, context);
         this[target] += ")";
     }
 
-    protected VisitAddExpression(node: Lexer.Token, context: any) {
+    private VisitAddExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         // This seems very wrong.
         if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
@@ -624,7 +627,7 @@ export class Visitor {
         }
     }
 
-    protected VisitSubExpression(node: Lexer.Token, context: any) {
+    private VisitSubExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         // This seems very wrong.
         if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
@@ -637,7 +640,7 @@ export class Visitor {
         }
     }
 
-    protected VisitMulExpression(node: Lexer.Token, context: any) {
+    private VisitMulExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         // This seems very wrong.
         if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
@@ -650,7 +653,7 @@ export class Visitor {
         }
     }
 
-    protected VisitDivExpression(node: Lexer.Token, context: any) {
+    private VisitDivExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
             this[target] += "NULL";
@@ -662,7 +665,7 @@ export class Visitor {
         }
     }
 
-    protected VisitModExpression(node: Lexer.Token, context: any) {
+    private VisitModExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (this.type == SQLLang.SurrealDB && (this.isId(node.value.left) || this.isId(node.value.right))) {
             this[target] += "NULL";
@@ -674,11 +677,11 @@ export class Visitor {
         }
     }
 
-    protected VisitCommonExpression(node: Lexer.Token, context: any) {
+    private VisitCommonExpression(node: Lexer.Token, context: any) {
         this.Visit(node.value, context);
     }
 
-    protected VisitFirstMemberExpression(node: Lexer.Token, context: any) {
+    private VisitFirstMemberExpression(node: Lexer.Token, context: any) {
         if (Array.isArray(node.value)) {
             const [first, second] = node.value;
             if (first.type === Lexer.TokenType.LambdaVariableExpression) {
@@ -696,7 +699,7 @@ export class Visitor {
         }
     }
 
-    protected VisitMemberExpression(node: Lexer.Token, context: any) {
+    private VisitMemberExpression(node: Lexer.Token, context: any) {
         if (node.value.name && node.value.value) {
             this.Visit(node.value.name, context);
             const target = context?.target || 'where';
@@ -708,7 +711,7 @@ export class Visitor {
         }
     }
 
-    protected VisitPropertyPathExpression(node: Lexer.Token, context: any) {
+    private VisitPropertyPathExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (node.value.current && node.value.next) {
             this.Visit(node.value.current, context);
@@ -729,7 +732,7 @@ export class Visitor {
         else this.Visit(node.value, context);
     }
 
-    protected VisitSingleNavigationExpression(node: Lexer.Token, context: any) {
+    private VisitSingleNavigationExpression(node: Lexer.Token, context: any) {
         if (node.value.current && node.value.next) {
             this.Visit(node.value.current, context);
             this.Visit(node.value.next, context);
@@ -737,7 +740,7 @@ export class Visitor {
         else this.Visit(node.value, context);
     }
 
-    protected VisitODataIdentifier(node: Lexer.Token, context: any) {
+    private VisitODataIdentifier(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
             if (context.target == 'orderby') {
                 // Orderby fields are not parameterized in SurrealDB, so we'll just output & escape the raw name.
@@ -755,7 +758,7 @@ export class Visitor {
         context.identifier = node.value.name;
     }
 
-    protected VisitEqualsExpression(node: Lexer.Token, context: any) {
+    private VisitEqualsExpression(node: Lexer.Token, context: any) {
         this.VisitComparisonExpression(node, context, "=");
         if (this.type != SQLLang.SurrealDB) {
             if (this.options.useParameters && context.literal == null) {
@@ -769,7 +772,7 @@ export class Visitor {
         }
     }
 
-    protected VisitNotEqualsExpression(node: Lexer.Token, context: any) {
+    private VisitNotEqualsExpression(node: Lexer.Token, context: any) {
         this.VisitComparisonExpression(node, context, "!=");
 
         if (this.type != SQLLang.SurrealDB) {
@@ -785,23 +788,23 @@ export class Visitor {
         }
     }
 
-    protected VisitLesserThanExpression(node: Lexer.Token, context: any) {
+    private VisitLesserThanExpression(node: Lexer.Token, context: any) {
         this.VisitComparisonExpression(node, context, "<");
     }
 
-    protected VisitLesserOrEqualsExpression(node: Lexer.Token, context: any) {
+    private VisitLesserOrEqualsExpression(node: Lexer.Token, context: any) {
         this.VisitComparisonExpression(node, context, "<=");
     }
 
-    protected VisitGreaterThanExpression(node: Lexer.Token, context: any) {
+    private VisitGreaterThanExpression(node: Lexer.Token, context: any) {
         this.VisitComparisonExpression(node, context, ">");
     }
 
-    protected VisitGreaterOrEqualsExpression(node: Lexer.Token, context: any) {
+    private VisitGreaterOrEqualsExpression(node: Lexer.Token, context: any) {
         this.VisitComparisonExpression(node, context, ">=");
     }
 
-    protected VisitLiteral(node: Lexer.Token, context: any) {
+    private VisitLiteral(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (this.options.useParameters) {
             this.checkParameterLimit();
@@ -831,11 +834,11 @@ export class Visitor {
         else this[target] += (context.literal = SQLLiteral.convert(node.value, node.raw));
     }
 
-    protected VisitCollectionPathExpression(node: Lexer.Token, context: any) {
+    private VisitCollectionPathExpression(node: Lexer.Token, context: any) {
         this.Visit(node.value, context);
     }
 
-    protected VisitAnyExpression(node: Lexer.Token, context: any) {
+    private VisitAnyExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         const lambdaVar = node.value.variable;
         const predicate = node.value.predicate;
@@ -851,7 +854,7 @@ export class Visitor {
         }
     }
 
-    protected VisitAllExpression(node: Lexer.Token, context: any) {
+    private VisitAllExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         const lambdaVar = node.value.variable;
         const predicate = node.value.predicate;
@@ -866,25 +869,25 @@ export class Visitor {
         }
     }
 
-    protected VisitLambdaVariableExpression(node: Lexer.Token, context: any) {
+    private VisitLambdaVariableExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
             const target = context?.target || 'where';
             this[target] += "$this";
         }
     }
 
-    protected VisitLambdaPredicateExpression(node: Lexer.Token, context: any) {
+    private VisitLambdaPredicateExpression(node: Lexer.Token, context: any) {
         this.Visit(node.value, context);
     }
 
-    protected VisitImplicitVariableExpression(node: Lexer.Token, context: any) {
+    private VisitImplicitVariableExpression(node: Lexer.Token, context: any) {
         if (this.type == SQLLang.SurrealDB) {
             const target = context?.target || 'where';
             this[target] += "$this";
         }
     }
 
-    protected VisitMethodCallExpression(node: Lexer.Token, context: any) {
+    private VisitMethodCallExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         const method = node.value.method;
         const params = node.value.parameters || [];
