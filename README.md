@@ -466,12 +466,38 @@ accessControl: {
 
 ```typescript
 // Request flow:
-beforeRecordGet → Database Query → afterRecordGet → Response
+Global beforeRecordGet → Table beforeRecordGet → 
+Database Query → 
+Table afterRecordGet → Global afterRecordGet → Response
 
 // Mutation flow:
-beforeRecordMutate → beforeRecord[Post|Patch|Put|Delete] → 
+Global beforeRecordMutate → Table beforeRecordMutate → 
+Global beforeRecord[Post|Patch|Put|Delete] → Table beforeRecord[Post|Patch|Put|Delete] → 
 Database Operation → 
-afterRecord[Post|Patch|Put|Delete] → afterRecordMutate → Response
+Table afterRecord[Post|Patch|Put|Delete] → Global afterRecord[Post|Patch|Put|Delete] → 
+Table afterRecordMutate → Global afterRecordMutate → Response
+```
+
+### Global Hooks
+
+Hooks can be defined globally in the configuration object to apply logic across all tables:
+
+```typescript
+SurrealODataV4Middleware({
+  hooks: {
+    beforeRecordGet: async (req) => {
+      // Global logging or validation
+      console.log(`[${req.method}] ${req.originalUrl}`);
+    },
+    beforeRecordMutate: async (req, record) => {
+      // Add metadata to all created/updated records
+      record.updatedAt = new Date();
+      record.updatedBy = req.user.id;
+      return record;
+    }
+  },
+  tables: [/* ... */]
+});
 ```
 
 ---
@@ -691,6 +717,28 @@ new ODataExpressTable({
 ```
 
 Fields not listed are accessible to all users with table read permission. Restricted fields are automatically filtered from `$select` queries for unauthorized users.
+
+### Blocked Fields
+
+Completely exclude fields from the API response for all users with `blockedFields`. 
+This is useful for internal-only fields that should never be exposed, such as password hashes, internal IDs, or sensitive metadata.
+
+```typescript
+new ODataExpressTable({
+  table: "users",
+  
+  // Always remove these fields from the response
+  // Supports dot notation for nested fields
+  blockedFields: [
+    "password", 
+    "internal_notes", 
+    "metadata.server_ip",
+    "history.audit_log"
+  ]
+})
+```
+
+These fields will be recursively stripped from all API responses (GET list, GET single, POST/PUT/PATCH/DELETE results) before being sent to the client.
 
 ### Field Enumeration Protection
 

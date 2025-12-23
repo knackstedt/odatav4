@@ -9,6 +9,30 @@ import type { ODataExpressConfig, ODataExpressTable, ParsedQuery } from '../type
 import { getJSONSchema, getODataMetadata } from '../util/metadata';
 
 
+const removeBlockedFields = (record: any, blockedFields: string[]) => {
+    if (!record || typeof record !== 'object') return;
+
+    for (const field of blockedFields) {
+        const parts = field.split('.');
+        let current = record;
+
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (current && typeof current === 'object') {
+                current = current[parts[i]];
+            } else {
+                current = undefined;
+                break;
+            }
+        }
+
+        if (current && typeof current === 'object') {
+            delete current[parts[parts.length - 1]];
+        }
+    }
+    return record;
+};
+
+
 
 /**
  * Supported request formats
@@ -440,10 +464,20 @@ export const ODataCRUDMethods = async (
 
 
     if (isBulk) {
+        if (config.tables) {
+            results.forEach(r => {
+                if (r?.accessResult?.tableConfig?.blockedFields) {
+                    removeBlockedFields(r.result, r.accessResult.tableConfig.blockedFields);
+                }
+            });
+        }
         results = results.filter(r => !!r);
         return results;
     }
     else {
+        if (results[0]?.accessResult?.tableConfig?.blockedFields) {
+            removeBlockedFields(results[0].result, results[0].accessResult.tableConfig.blockedFields);
+        }
         return results[0];
     }
 };
@@ -576,6 +610,11 @@ export const SurrealODataV4Middleware = (
                 }
             }
 
+            // Filter blocked fields
+            if (tableConfig.blockedFields) {
+                removeBlockedFields(result, tableConfig.blockedFields);
+            }
+
             res.contentType("application/json");
             res.send(JSON.stringify(result, (key, value) => {
                 if (typeof value === 'bigint') return value.toString();
@@ -689,6 +728,11 @@ export const SurrealODataV4Middleware = (
 
                 return filteredRecord;
             });
+        }
+
+        // Filter blocked fields
+        if (tableConfig.blockedFields) {
+            result.value.forEach(record => removeBlockedFields(record, tableConfig.blockedFields!));
         }
 
         res.setHeader('Content-Type', 'application/json');

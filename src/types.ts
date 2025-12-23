@@ -180,6 +180,12 @@ class ODataExpressTableConfig<T = unknown> {
     allowedOrderByFields?: string[];
 
     /**
+     * List of fields to always exclude from the response.
+     * Supports dot notation for nested fields (e.g. "foo.bar").
+     */
+    blockedFields?: string[];
+
+    /**
      * Hook that is called before record(s) are fetched (GET).
      * May be used to perform additional validation, logging, etc.
      */
