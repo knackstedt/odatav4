@@ -6,6 +6,7 @@ import dts from "vite-plugin-dts";
 export default defineConfig(({ mode }) => ({
     plugins: [dts({ rollupTypes: true })],
     build: {
+        minify: false,
         lib: {
             // Main entry point for the library
             entry: resolve(__dirname, 'src/main.ts'),

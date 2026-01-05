@@ -25,7 +25,6 @@ export class SurrealDbVisitor extends Visitor {
         const left = node.value.left;
         const right = node.value.right;
 
-        const isLeftId = this.isId(left);
         const isRightLiteral = right && (right.type == Lexer.TokenType.Literal || (right.type as any) == "Literal");
         const isRightPotentialId = isRightLiteral && (
             (right.value == "Edm.String" && /(?<=[^\\]|^):/.test(right.raw)) ||
@@ -33,34 +32,62 @@ export class SurrealDbVisitor extends Visitor {
             (typeof right.value == "string" && ["Edm.SByte", "Edm.Byte", "Edm.Decimal", "Edm.Double", "Edm.Single"].includes(right.value as string)) ||
             typeof right.value == "number"
         );
+        const isLeftLiteral = left && (left.type == Lexer.TokenType.Literal || (left.type as any) == "Literal");
+        const isLeftPotentialId = isLeftLiteral && (
+            (left.value == "Edm.String" && /(?<=[^\\]|^):/.test(left.raw)) ||
+            (typeof left.value == "string" && (left.value as string).startsWith("Edm.Int")) ||
+            (typeof left.value == "string" && ["Edm.SByte", "Edm.Byte", "Edm.Decimal", "Edm.Double", "Edm.Single"].includes(left.value as string)) ||
+            typeof left.value == "number"
+        );
 
-        if (isLeftId && isRightPotentialId) {
+        if (isLeftPotentialId || isRightPotentialId) {
             const where = this.where;
             this.where = '';
             this.Visit(left, context);
-            const field = this.where;
+            const leftStr = this.where;
 
             this.where = '';
             this.Visit(right, context);
-            const literal = this.where;
+            const rightStr = this.where;
 
             this.where = where;
 
-            if (operator == "=" || operator == "!=") {
-                if (operator == "=") {
-                    this.where += `((${field} = ${literal}) || (string::is_record(type::string(${field})) && (string::ends_with(type::string(${field}), ":" + type::string(${literal})))))`;
+            if (isLeftPotentialId) {
+                if (operator == "=" || operator == "!=") {
+                    if (operator == "=") {
+                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (string::ends_with(type::string(${leftStr}), ":" + type::string(${rightStr})))))`;
+                    }
+                    else {
+                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (string::ends_with(type::string(${leftStr}), ":" + type::string(${rightStr})))))`;
+                    }
+                    return;
                 }
                 else {
-                    this.where += `! ((${field} = ${literal}) || (string::is_record(type::string(${field})) && (string::ends_with(type::string(${field}), ":" + type::string(${literal})))))`;
+                    // Range comparison for IDs
+                    // Only compare the numeric part if it's a record.
+                    // Otherwise, compare the raw field.
+                    this.where += `((string::is_record(type::string(${leftStr})) && type::number(string::split(type::string(${leftStr}), ":")[1]) ${operator} ${rightStr}) || (!string::is_record(type::string(${leftStr})) && ${leftStr} ${operator} ${rightStr}))`;
+                    return;
                 }
-                return;
+
             }
-            else {
-                // Range comparison for IDs
-                // Only compare the numeric part if it's a record.
-                // Otherwise, compare the raw field.
-                this.where += `((string::is_record(type::string(${field})) && type::number(string::split(type::string(${field}), ":")[1]) ${operator} ${literal}) || (!string::is_record(type::string(${field})) && ${field} ${operator} ${literal}))`;
-                return;
+            else if (isRightPotentialId) {
+                if (operator == "=" || operator == "!=") {
+                    if (operator == "=") {
+                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (string::ends_with(type::string(${rightStr}), ":" + type::string(${leftStr})))))`;
+                    }
+                    else {
+                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (string::ends_with(type::string(${rightStr}), ":" + type::string(${leftStr})))))`;
+                    }
+                    return;
+                }
+                else {
+                    // Range comparison for IDs
+                    // Only compare the numeric part if it's a record.
+                    // Otherwise, compare the raw field.
+                    this.where += `((string::is_record(type::string(${rightStr})) && type::number(string::split(type::string(${rightStr}), ":")[1]) ${operator} ${leftStr}) || (!string::is_record(type::string(${rightStr})) && ${rightStr} ${operator} ${leftStr}))`;
+                    return;
+                }
             }
         }
 
