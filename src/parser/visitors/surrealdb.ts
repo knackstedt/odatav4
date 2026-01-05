@@ -55,10 +55,10 @@ export class SurrealDbVisitor extends Visitor {
             if (isLeftPotentialId) {
                 if (operator == "=" || operator == "!=") {
                     if (operator == "=") {
-                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::field(${leftStr}) = type::string(${rightStr}))))`;
+                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::string(${leftStr}) = ${rightStr})))`;
                     }
                     else {
-                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::field(${leftStr}) = type::string(${rightStr}))))`;
+                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::string(${leftStr}) = ${rightStr})))`;
                     }
                     return;
                 }
@@ -69,15 +69,14 @@ export class SurrealDbVisitor extends Visitor {
                     this.where += `((string::is_record(type::string(${leftStr})) && type::number(string::split(type::string(${leftStr}), ":")[1]) ${operator} ${rightStr}) || (!string::is_record(type::string(${leftStr})) && ${leftStr} ${operator} ${rightStr}))`;
                     return;
                 }
-
             }
             else if (isRightPotentialId) {
                 if (operator == "=" || operator == "!=") {
                     if (operator == "=") {
-                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::field(${rightStr}) = type::string(${leftStr}))))`;
+                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::string(${rightStr}) = ${leftStr})))`;
                     }
                     else {
-                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::field(${rightStr}) = type::string(${leftStr}))))`;
+                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::string(${rightStr}) = ${leftStr})))`;
                     }
                     return;
                 }
