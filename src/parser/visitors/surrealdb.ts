@@ -55,10 +55,10 @@ export class SurrealDbVisitor extends Visitor {
             if (isLeftPotentialId) {
                 if (operator == "=" || operator == "!=") {
                     if (operator == "=") {
-                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (string::ends_with(type::string(${leftStr}), ":" + type::string(${rightStr})))))`;
+                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::field(${leftStr}) = type::string(${rightStr})))))`;
                     }
                     else {
-                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (string::ends_with(type::string(${leftStr}), ":" + type::string(${rightStr})))))`;
+                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::field(${leftStr}) = type::string(${rightStr})))))`;
                     }
                     return;
                 }
@@ -74,10 +74,10 @@ export class SurrealDbVisitor extends Visitor {
             else if (isRightPotentialId) {
                 if (operator == "=" || operator == "!=") {
                     if (operator == "=") {
-                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (string::ends_with(type::string(${rightStr}), ":" + type::string(${leftStr})))))`;
+                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::field(${rightStr}) = type::string(${leftStr})))))`;
                     }
                     else {
-                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (string::ends_with(type::string(${rightStr}), ":" + type::string(${leftStr})))))`;
+                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::field(${rightStr}) = type::string(${leftStr})))))`;
                     }
                     return;
                 }
