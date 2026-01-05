@@ -55,10 +55,10 @@ export class SurrealDbVisitor extends Visitor {
             if (isLeftPotentialId) {
                 if (operator == "=" || operator == "!=") {
                     if (operator == "=") {
-                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::string(${leftStr}) = ${rightStr})))`;
+                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(${leftStr})) && (type::record(${leftStr}) = ${rightStr})))`;
                     }
                     else {
-                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(type::string(${leftStr})) && (type::string(${leftStr}) = ${rightStr})))`;
+                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(${leftStr})) && (type::record(${leftStr}) = ${rightStr})))`;
                     }
                     return;
                 }
@@ -73,10 +73,10 @@ export class SurrealDbVisitor extends Visitor {
             else if (isRightPotentialId) {
                 if (operator == "=" || operator == "!=") {
                     if (operator == "=") {
-                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::string(${rightStr}) = ${leftStr})))`;
+                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::record(${rightStr}) = ${leftStr})))`;
                     }
                     else {
-                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::string(${rightStr}) = ${leftStr})))`;
+                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::record(${rightStr}) = ${leftStr})))`;
                     }
                     return;
                 }

@@ -1,6 +1,6 @@
 {
     "name": "@dotglitch/odatav4",
-    "version": "4.2.6",
+    "version": "4.2.7",
     "description": "Maintained ODataV4 adapter. Supports SurrealDB.",
     "type": "module",
     "main": "./dist/odatav4.cjs",
