@@ -648,7 +648,31 @@ export namespace Expressions {
         if (!token) return;
 
         let close = Lexer.CLOSE(value, token.next);
-        if (!close) return;
+        if (!close) {
+            // Try to handle comma separated list of IDs (e.g. valid IDs without keys)
+            let values = [token];
+            let next = token.next;
+            while (true) {
+                let comma = Lexer.COMMA(value, next);
+                if (comma) {
+                    next = comma;
+                    let val = keyPropertyValue(value, next);
+                    if (val) {
+                        values.push(val);
+                        next = val.next;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            close = Lexer.CLOSE(value, next);
+            if (close) {
+                return Lexer.tokenize(value, start, close, { values }, Lexer.TokenType.SimpleKey);
+            }
+            return;
+        }
 
         let key;
         if (typeof metadataContext === "object" &&
@@ -702,8 +726,29 @@ export namespace Expressions {
     export function keyPropertyValue(value: Utils.SourceArray, index: number): Lexer.Token {
         let token = PrimitiveLiteral.primitiveLiteral(value, index);
         if (token) {
-            token.type = Lexer.TokenType.KeyPropertyValue;
-            return token;
+            let next = token.next;
+            let char = value[next];
+            // If followed by something other than delimiter, it's likely a partial match of an unquoted string
+            if (char === undefined || char === 0x29 || char === 0x2c || char === 0x20 || char === 0x09) {
+                token.type = Lexer.TokenType.KeyPropertyValue;
+                return token;
+            }
+            // Fallthrough to unquoted string logic
+        }
+
+        // Support unquoted IDs (e.g. finding:..., 01kf...)
+        // We capture until the next comma or close paren
+        // But we must be careful not to consume too much.
+        // Let's try to capture characters that are allowed in these IDs.
+        // It seems they can contain alphanumerics and colons at least.
+        let startex = index;
+        while (index < value.length) {
+            let char = value[index];
+            if (char === 0x29 || char === 0x2c) break; // ) or ,
+            index++;
+        }
+        if (index > startex) {
+            return Lexer.tokenize(value, startex, index, { value: "UnquotedString" }, Lexer.TokenType.KeyPropertyValue);
         }
     }
     export function keyPropertyAlias(value: Utils.SourceArray, index: number): Lexer.Token { return NameOrIdentifier.odataIdentifier(value, index, Lexer.TokenType.KeyPropertyAlias); }

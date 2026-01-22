@@ -1,8 +1,8 @@
-import Utils from "./utils";
-import Lexer from "./lexer";
-import PrimitiveLiteral from "./primitive-literal";
-import NameOrIdentifier from "./name-or-identifier";
 import Expressions from "./expressions";
+import Lexer from "./lexer";
+import NameOrIdentifier from "./name-or-identifier";
+import PrimitiveLiteral from "./primitive-literal";
+import Utils from "./utils";
 
 export namespace ResourcePath {
     export function resourcePath(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
@@ -119,6 +119,24 @@ export namespace ResourcePath {
         if (token) return token;
 
         let predicate = Expressions.keyPredicate(value, index, metadataContext);
+
+        if (!predicate && (value[index] === 0x2f || value[index] === 0x3a)) {
+            let nextSlash = index + 1;
+            let end = nextSlash;
+            while (end < value.length && value[end] !== 0x2f && value[end] !== 0x3f) {
+                end++;
+            }
+            if (end > nextSlash) {
+                let seg = Utils.stringify(value, nextSlash, end);
+                if (/^[0-9]/.test(seg) || seg.indexOf(':') > -1) {
+                    let keyVal = Lexer.tokenize(value, nextSlash, end, { value: "UnquotedString" }, Lexer.TokenType.KeyPropertyValue);
+                    predicate = Lexer.tokenize(value, index, end, {
+                        value: Lexer.tokenize(value, index, end, { value: keyVal }, Lexer.TokenType.SimpleKey)
+                    }, Lexer.TokenType.SimpleKey);
+                }
+            }
+        }
+
         if (predicate) {
             let tokenValue: any = { predicate };
             index = predicate.next;
@@ -259,7 +277,7 @@ export namespace ResourcePath {
         if (!operation) return;
         index = operation.next;
 
-        let name:Lexer.Token, navigation:Lexer.Token;
+        let name: Lexer.Token, navigation: Lexer.Token;
         switch (operation.type) {
             case Lexer.TokenType.BoundActionCall:
                 break;
