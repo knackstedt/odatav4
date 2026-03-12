@@ -482,20 +482,6 @@ export const ODataCRUDMethods = async (
     }
 };
 
-/**
- * OData V4 Middleware for Express
- * Based on the provided configuration, creates an Express router that
- * handles OData V4 requests, translates them into SurrealDB queries,
- */
-const odataJson = (res: express.Response, data: any, status = 200) => {
-    res.status(status).setHeader('Content-Type', 'application/json');
-    res.send(JSON.stringify(data, (key, value) => {
-        if (typeof value === 'bigint') return value.toString();
-        if (value instanceof RecordId) return value.toString();
-        return value;
-    }));
-};
-
 export const SurrealODataV4Middleware = (
     config: ODataExpressConfig
 ) => {
