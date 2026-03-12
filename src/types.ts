@@ -89,6 +89,12 @@ class ODataExpressTableConfig<T = unknown> {
     fetch?: string | string[];
 
     /**
+     * Optional query timeout for this table's operations. Accepts a SurrealDB duration string
+     * such as "5s" or a number of milliseconds (e.g. 5000).
+     */
+    timeout?: string | number;
+
+    /**
      * Access control configuration for the table.
      * The roles are read from `req.session.profile.roles` which should be an array of strings.
      *
@@ -186,6 +192,12 @@ class ODataExpressTableConfig<T = unknown> {
     blockedFields?: string[];
 
     /**
+     * Whitelist of response fields to include. Each entry is a dot-separated path.
+     * If specified, only these fields will be returned in GET responses for this table.
+     */
+    allowedFieldPaths?: string[];
+
+    /**
      * Hook that is called before record(s) are fetched (GET).
      * May be used to perform additional validation, logging, etc.
      */
@@ -280,6 +292,12 @@ export type ODataExpressConfig = {
      * Default: 1000000
      */
     maxSkip?: number;
+
+    /**
+     * Optional default query timeout applied to all operations when a table doesn't override it.
+     * Accepts a SurrealDB duration string such as "5s" or a number of milliseconds (e.g. 5000).
+     */
+    timeout?: string | number;
 };
 
 

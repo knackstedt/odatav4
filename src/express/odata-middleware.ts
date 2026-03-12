@@ -33,6 +33,63 @@ const removeBlockedFields = (record: any, blockedFields: string[]) => {
 };
 
 
+/**
+ * Keep only the allowed fields in the record, supporting dot-separated paths.
+ */
+const keepAllowedFields = (record: any, allowedPaths: string[]) => {
+    if (!record || typeof record !== 'object' || !Array.isArray(allowedPaths) || allowedPaths.length === 0) return record;
+
+    const result: any = Array.isArray(record) ? [] : {};
+
+    const assignPath = (target: any, source: any, path: string[]) => {
+        let curTarget = target;
+        let curSource = source;
+        for (let i = 0; i < path.length; i++) {
+            if (curSource == null) return;
+            const key = path[i];
+            if (i === path.length - 1) {
+                if (curSource && Object.prototype.hasOwnProperty.call(curSource, key)) {
+                    if (Array.isArray(curTarget)) {
+                        // Not expected for arrays at root; skip
+                    } else {
+                        curTarget[key] = curSource[key];
+                    }
+                }
+            } else {
+                if (!curSource || typeof curSource[key] !== 'object') return;
+                if (Array.isArray(curSource[key])) {
+                    // Copy arrays wholesale when path points to an array container
+                    curTarget[key] = curSource[key].map((item: any) => ({ ...item }));
+                    return;
+                }
+                curTarget[key] = curTarget[key] || {};
+                curTarget = curTarget[key];
+                curSource = curSource[key];
+            }
+        }
+    };
+
+    for (const p of allowedPaths) {
+        const parts = p.split('.').filter(Boolean);
+        if (parts.length === 0) continue;
+        assignPath(result, record, parts);
+    }
+
+    return result;
+};
+
+const formatTimeoutValue = (timeout?: string | number) => {
+    if (timeout == null) return undefined;
+    if (typeof timeout === 'number') return `${timeout}ms`;
+    return timeout;
+};
+
+const withTimeoutPrefix = (sql: string, timeout?: string | number) => {
+    const t = formatTimeoutValue(timeout);
+    return t ? `USE TIMEOUT ${t}; ${sql}` : sql;
+};
+
+
 
 /**
  * Supported request formats
@@ -220,7 +277,7 @@ export const RunODataV4SelectFilter = async (
     urlPath: string,
     fetch = [] as string | string[],
     parsed?: ParsedQuery,
-    options?: { maxPageSize?: number; } & SqlOptions
+    options?: { maxPageSize?: number; timeout?: string | number; } & SqlOptions
 ) => {
 
     // Ensure we have a parsed query object
@@ -264,8 +321,8 @@ export const RunODataV4SelectFilter = async (
     let countResult, data;
     try {
         const [rawCountResult, rawData] = await Promise.all([
-            db.query(countQuery.toString(), parameters).collect<any[]>(),
-            db.query(entriesQuery.toString(), parameters).collect<any[]>()
+            db.query(withTimeoutPrefix(countQuery.toString(), options?.timeout), parameters).collect<any[]>(),
+            db.query(withTimeoutPrefix(entriesQuery.toString(), options?.timeout), parameters).collect<any[]>()
         ]);
 
         // SurrealDB's collect() returns an array of result arrays, one for each query.
@@ -369,7 +426,7 @@ export const ODataCRUDMethods = async (
 
     // Get all of the data
     let results = await Promise.all(items.map(async (item) => {
-        const { id, table } = item[accessResult];
+        const { id, table, tableConfig } = item[accessResult];
         const db = connection;
 
         const rid = id == null ? null : new RecordId(table, id);
@@ -380,8 +437,10 @@ export const ODataCRUDMethods = async (
                 : config.variables
         ) || [];
 
+        const tmo = tableConfig.timeout ?? config.timeout;
+
         idGenerator ??= async () => {
-            return db.query('RETURN rand::ulid().lowercase()')
+            return db.query(withTimeoutPrefix('RETURN rand::ulid().lowercase()', tmo))
                 .collect<[string]>()
                 .then(r => r[0]);
         };
@@ -390,7 +449,7 @@ export const ODataCRUDMethods = async (
         if (req.method === "POST") {
             const newId = new RecordId(table, await idGenerator(item));
             delete item.id;
-            const results = await db.query(`CREATE type::record($id) CONTENT $content`, {
+            const results = await db.query(withTimeoutPrefix(`CREATE type::record($id) CONTENT $content`, tmo), {
                 id: newId,
                 content: item,
                 ...variables
@@ -404,7 +463,7 @@ export const ODataCRUDMethods = async (
             // }
 
             delete item.id;
-            const results = await db.query(`UPDATE type::record($id) MERGE $content`, {
+            const results = await db.query(withTimeoutPrefix(`UPDATE type::record($id) MERGE $content`, tmo), {
                 id: rid,
                 content: item,
                 ...variables
@@ -413,7 +472,7 @@ export const ODataCRUDMethods = async (
         }
         else if (req.method === "PUT") {
             delete item.id;
-            const results = await db.query(`UPSERT type::record($id) CONTENT $content`, {
+            const results = await db.query(withTimeoutPrefix(`UPSERT type::record($id) CONTENT $content`, tmo), {
                 id: rid,
                 content: item,
                 ...variables
@@ -421,7 +480,7 @@ export const ODataCRUDMethods = async (
             result = results.pop()[0];
         }
         else if (req.method === "DELETE") {
-            const results = await db.query(`DELETE type::record($id)`, {
+            const results = await db.query(withTimeoutPrefix(`DELETE type::record($id)`, tmo), {
                 id: rid,
                 ...variables
             }).collect();
@@ -469,6 +528,9 @@ export const ODataCRUDMethods = async (
                 if (r?.accessResult?.tableConfig?.blockedFields) {
                     removeBlockedFields(r.result, r.accessResult.tableConfig.blockedFields);
                 }
+                if (r?.accessResult?.tableConfig?.allowedFieldPaths && r.accessResult.tableConfig.allowedFieldPaths.length > 0) {
+                    r.result = keepAllowedFields(r.result, r.accessResult.tableConfig.allowedFieldPaths);
+                }
             });
         }
         results = results.filter(r => !!r);
@@ -477,6 +539,9 @@ export const ODataCRUDMethods = async (
     else {
         if (results[0]?.accessResult?.tableConfig?.blockedFields) {
             removeBlockedFields(results[0].result, results[0].accessResult.tableConfig.blockedFields);
+        }
+        if (results[0]?.accessResult?.tableConfig?.allowedFieldPaths && results[0].accessResult.tableConfig.allowedFieldPaths.length > 0) {
+            results[0].result = keepAllowedFields(results[0].result, results[0].accessResult.tableConfig.allowedFieldPaths);
         }
         return results[0];
     }
@@ -566,7 +631,8 @@ export const SurrealODataV4Middleware = (
                     }).join(', ');
                 }
             }
-            let _r = await db.query(query, {
+            const tmo = tableConfig.timeout ?? router.config.timeout;
+            let _r = await db.query(withTimeoutPrefix(query, tmo), {
                 ...params,
                 id: new RecordId(table, id)
             }).collect<any[][]>();
@@ -599,6 +665,11 @@ export const SurrealODataV4Middleware = (
             // Filter blocked fields
             if (tableConfig.blockedFields) {
                 removeBlockedFields(result, tableConfig.blockedFields);
+            }
+
+            // Apply allowed field paths if configured
+            if (tableConfig.allowedFieldPaths && tableConfig.allowedFieldPaths.length > 0) {
+                result = keepAllowedFields(result, tableConfig.allowedFieldPaths);
             }
 
             res.contentType("application/json");
@@ -719,6 +790,11 @@ export const SurrealODataV4Middleware = (
         // Filter blocked fields
         if (tableConfig.blockedFields) {
             result.value.forEach(record => removeBlockedFields(record, tableConfig.blockedFields!));
+        }
+
+        // Apply allowed field paths if configured
+        if (tableConfig.allowedFieldPaths && tableConfig.allowedFieldPaths.length > 0) {
+            result.value = result.value.map(record => keepAllowedFields(record, tableConfig.allowedFieldPaths!));
         }
 
         res.setHeader('Content-Type', 'application/json');
