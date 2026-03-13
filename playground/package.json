@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "scripts": {
         "dev": "ng serve",
-        "build": "ng build --configuration production",
+        "build": "ng build --configuration production --base-href=/odatav4/",
         "build:dev": "ng build --configuration development",
         "watch": "ng build --watch --configuration development",
         "test": "ng test",
