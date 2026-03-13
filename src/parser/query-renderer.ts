@@ -1,4 +1,3 @@
-import * as util from 'util';
 import type { ParsedQuery } from "../types";
 import { Visitor } from "./visitor";
 
@@ -28,7 +27,7 @@ function createInspectableString(sql: string, parameters: Record<string, any>) {
             if (prop === 'toString') {
                 return () => sql;
             }
-            else if (prop === util.inspect?.custom) {
+            else if (prop === require?.("util")?.inspect?.custom) {
                 return (depth: number, options: any) => {
 
                     const base = '\x1b[38;2;255;255;255m';
