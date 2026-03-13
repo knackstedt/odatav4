@@ -1,4 +1,4 @@
-name: Documentation
+name: Playground
 
 on:
   # Runs on pushes to main branch
@@ -30,6 +30,10 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies 1
+        working-directory:
+        run: bun install
+
+      - name: Install dependencies 2
         working-directory: ./playground
         run: bun install
 
