@@ -67,7 +67,7 @@
                     <ngx-monaco-editor
                         [(code)]="param.value"
                         (codeChange)="generateQueryClientSide()"
-                        installationLocation="/lib/monaco/vs"
+                        installationLocation="lib/monaco/vs"
                         language="odata-query"
                         theme="vs-dark"
                         [minimapEnabled]="false"
@@ -127,7 +127,7 @@
                         style="height: 600px;"
                         [code]="queryResult()!.generatedQuery"
                         (codeChange)="generateQueryClientSide()"
-                        installationLocation="/lib/monaco/vs"
+                        installationLocation="lib/monaco/vs"
                         language="surrealql"
                         theme="vs-dark"
                         [minimapEnabled]="false"
