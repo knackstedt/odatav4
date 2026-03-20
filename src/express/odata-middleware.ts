@@ -710,6 +710,14 @@ export const SurrealODataV4Middleware = (
             }
         }
 
+        // Re-parse the query with fieldAliases if configured
+        let parsedQuery = req[$odata];
+        if (tableConfig.fieldAliases) {
+            parsedQuery = parseODataRequest(url.toString(), {
+                fieldAliases: tableConfig.fieldAliases
+            });
+        }
+
         // Inject row-level filter if configured
         if (typeof tableConfig.rowLevelFilter === 'function') {
             const rowFilter = await (async () => {
@@ -729,16 +737,16 @@ export const SurrealODataV4Middleware = (
             }
 
             // Merge row-level filter with user's $filter
-            if (req[$odata].where) {
-                req[$odata].where = `(${req[$odata].where}) AND (${additionalWhere})`;
+            if (parsedQuery.where) {
+                parsedQuery.where = `(${parsedQuery.where}) AND (${additionalWhere})`;
             }
             else {
-                req[$odata].where = additionalWhere;
+                parsedQuery.where = additionalWhere;
             }
 
             // Merge parameters
             for (const [key, value] of Object.entries(additionalParams)) {
-                req[$odata].parameters.set(key, value);
+                parsedQuery.parameters.set(key, value);
             }
         }
 
@@ -747,8 +755,11 @@ export const SurrealODataV4Middleware = (
             table,
             url.toString(),
             tableConfig.fetch,
-            req[$odata],
-            config
+            parsedQuery,
+            {
+                ...config,
+                fieldAliases: tableConfig.fieldAliases
+            }
         );
 
         if (typeof tableConfig.afterRecordGet == "function") {

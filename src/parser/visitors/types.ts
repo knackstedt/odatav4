@@ -17,4 +17,5 @@ export interface SqlOptions {
     maxSkip?: number;
     maxParameters?: number;
     enableSearch?: boolean;
+    fieldAliases?: Record<string, string>;
 }

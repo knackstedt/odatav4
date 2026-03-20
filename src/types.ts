@@ -198,6 +198,13 @@ class ODataExpressTableConfig<T = unknown> {
     allowedFieldPaths?: string[];
 
     /**
+     * Field aliases for WHERE clause mapping. Maps OData field names to SurrealDB expressions.
+     * These aliases are NOT parameterized and are inserted directly into the query.
+     * Example: { "scan": "->on->finding" } maps $filter=scan eq 123 to WHERE ->on->finding = 123
+     */
+    fieldAliases?: Record<string, string>;
+
+    /**
      * Hook that is called before record(s) are fetched (GET).
      * May be used to perform additional validation, logging, etc.
      */

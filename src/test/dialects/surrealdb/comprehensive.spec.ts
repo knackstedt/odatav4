@@ -189,7 +189,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
         const filter = async (f: string) => (await parse(`$filter=${f}`)).where;
 
         it('contains', async () => {
-            expect(await filter("contains(Name, 'doe')")).toContain("string::contains(type::field($field1), type::string($param1))");
+            expect(await filter("contains(Name, 'doe')")).toContain("type::field($field1) CONTAINS $param1");
         });
 
         it('startswith', async () => {
@@ -206,7 +206,8 @@ describe('Comprehensive OData V4 Test Suite', () => {
         });
 
         it('indexof', async () => {
-            expect(await filter("indexof(Name, 'a') eq 1")).toContain("(IF string::contains(type::string(type::field($field1)), type::string($literal2)) THEN string::len(string::split(type::string(type::field($field2)), type::string($literal3))[0]) ELSE -1 END) = $literal4");
+            expect(await filter("indexof(Name, 'a') eq 1")).toContain("type::string(type::field($field1)) CONTAINS $literal2");
+            expect(await filter("indexof(Name, 'a') eq 1")).toContain("string::len(string::split(type::string(type::field($field2)), type::string($literal3))[0])");
         });
 
         it('substring', async () => {

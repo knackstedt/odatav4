@@ -25,6 +25,31 @@ export class SurrealDbVisitor extends Visitor {
         const left = node.value.left;
         const right = node.value.right;
 
+        // Helper to check if a node contains an aliased field
+        const containsAliasedField = (n: any): boolean => {
+            if (!n) return false;
+            if (n.type === Lexer.TokenType.ODataIdentifier && n.value?.name && this.options.fieldAliases?.[n.value.name]) {
+                return true;
+            }
+            // Check nested structures
+            if (n.value) {
+                if (n.value.left && containsAliasedField(n.value.left)) return true;
+                if (n.value.right && containsAliasedField(n.value.right)) return true;
+                if (n.value.current && containsAliasedField(n.value.current)) return true;
+                if (n.value.next && containsAliasedField(n.value.next)) return true;
+            }
+            return false;
+        };
+
+        // Skip record ID logic if either side contains an aliased field
+        // ALIASED fields are only ever treated as plaintext fields.
+        if (containsAliasedField(left) || containsAliasedField(right)) {
+            this.Visit(node.value.left, context);
+            this.where += ` ${operator} `;
+            this.Visit(node.value.right, context);
+            return;
+        }
+
         const isRightLiteral = right && (right.type == Lexer.TokenType.Literal || (right.type as any) == "Literal");
         const isRightPotentialId = isRightLiteral && (
             (right.value == "Edm.String" && /(?<=[^\\]|^):/.test(right.raw)) ||
@@ -297,13 +322,24 @@ export class SurrealDbVisitor extends Visitor {
     }
 
     protected VisitODataIdentifier(node: Lexer.Token, context: any) {
+        const fieldName = node.value.name;
+        const aliasedField = this.options.fieldAliases?.[fieldName];
+
         if (context.target == 'orderby') {
-            this[context.target] += '`' + node.value.name.replace(/`/g, '\\`') + '`';
+            if (aliasedField) {
+                this[context.target] += aliasedField;
+            } else {
+                this[context.target] += '`' + fieldName.replace(/`/g, '\\`') + '`';
+            }
         }
         else {
-            const fieldSeed = `$field${this.fieldSeed++}`;
-            this.parameters.set(fieldSeed, node.value.name);
-            this[context.target] += `type::field(${fieldSeed})`;
+            if (aliasedField) {
+                this[context.target] += aliasedField;
+            } else {
+                const fieldSeed = `$field${this.fieldSeed++}`;
+                this.parameters.set(fieldSeed, fieldName);
+                this[context.target] += `type::field(${fieldSeed})`;
+            }
         }
     }
 
@@ -389,12 +425,12 @@ export class SurrealDbVisitor extends Visitor {
 
         switch (method) {
             case "contains":
-                this[target] += 'string::contains(';
+                // Use SurrealDB's native CONTAINS operator
                 this.Visit(params[0], context);
-
+                this[target] += ' CONTAINS ';
                 let value = Literal.convert(params[1].value, params[1].raw);
                 this.parameters.set(name, value);
-                this[target] += `, type::string(${name}))`;
+                this[target] += name;
                 break;
             case "endswith":
                 this[target] += 'string::ends_with(';
@@ -413,11 +449,11 @@ export class SurrealDbVisitor extends Visitor {
                 this[target] += `, type::string(${name}))`;
                 break;
             case "indexof":
-                this[target] += "(IF string::contains(type::string(";
+                this[target] += "(IF type::string(";
                 this.Visit(params[0], context);
-                this[target] += "), type::string(";
+                this[target] += ") CONTAINS ";
                 this.Visit(params[1], context);
-                this[target] += ")) THEN string::len(string::split(type::string(";
+                this[target] += " THEN string::len(string::split(type::string(";
                 this.Visit(params[0], context);
                 this[target] += "), type::string(";
                 this.Visit(params[1], context);

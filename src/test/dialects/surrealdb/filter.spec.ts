@@ -124,7 +124,7 @@ describe('Logical operators', () => {
 describe('String functions', () => {
     it('contains function', async () => {
         const result = await processFilter("$filter=contains(name, 'oh')");
-        expect(result).toContain("string::contains(type::field($field1), type::string($param1))");
+        expect(result).toContain("type::field($field1) CONTAINS $param1");
     });
 
     it('startswith function', async () => {
