@@ -79,11 +79,11 @@ export function init(monaco: typeof Monaco) {
                 { include: '@comments' },
                 { include: '@numbers' },
                 { include: '@strings' },
-                { include: '@recordIds' },
                 { include: '@parameters' },
+                { include: '@recordIds' },
 
                 [/[;,.]/, 'delimiter'],
-                [/[{}()\[\]]/, '@brackets'],
+                [/[{}()\[\]]/, 'delimiter'],
 
                 [/[a-z_][\w]*(::[a-z_][\w]*)+/i, 'predefined'],
 
@@ -156,7 +156,7 @@ export function init(monaco: typeof Monaco) {
             ],
 
             recordIds: [
-                [/[a-z_][\w]*:[a-z0-9_]+/i, 'type.identifier'],
+                [/[a-z_][\w]*:(?![:\w])[a-z0-9_]+/i, 'type.identifier'],
                 [/[a-z_][\w]*:⟨[^⟩]+⟩/i, 'type.identifier'],
                 [/[a-z_][\w]*:\[[^\]]+\]/i, 'type.identifier'],
                 [/[a-z_][\w]*:\{[^}]+\}/i, 'type.identifier']
