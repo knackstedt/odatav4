@@ -78,15 +78,25 @@ const keepAllowedFields = (record: any, allowedPaths: string[]) => {
     return result;
 };
 
-const formatTimeoutValue = (timeout?: string | number) => {
+const formatTimeoutValue = (timeout: string | number) => {
     if (timeout == null) return undefined;
     if (typeof timeout === 'number') return `${timeout}ms`;
-    return timeout;
+
+    // Check if it's already in a valid format (e.g., "5s", "1000ms")
+    const trimmed = timeout.trim();
+    // As of 3.0.0 these do not support decimals.
+    if (/^\d+(ns|µs|us|ms|s|m|h|d)$/.test(trimmed)) {
+        return trimmed;
+    }
+
+    throw new Error(`Invalid timeout value: ${timeout}`);
 };
 
-const withTimeoutPrefix = (sql: string, timeout?: string | number) => {
-    const t = formatTimeoutValue(timeout);
-    return t ? `USE TIMEOUT ${t}; ${sql}` : sql;
+const withTimeout = (sql: string, timeout: string | number) => {
+    if (!timeout) return sql;
+
+    const timeoutSafe = formatTimeoutValue(timeout);
+    return `${sql} TIMEOUT ${timeoutSafe}`;
 };
 
 
@@ -321,11 +331,11 @@ export const RunODataV4SelectFilter = async (
     let countResult, data;
     try {
         const [rawCountResult, rawData] = await Promise.all([
-            db.query(withTimeoutPrefix(countQuery.toString(), options?.timeout), parameters).collect<any[]>(),
-            db.query(withTimeoutPrefix(entriesQuery.toString(), options?.timeout), parameters).collect<any[]>()
+            db.query(withTimeout(countQuery.toString(), options?.timeout), parameters).collect<any[]>(),
+            db.query(withTimeout(entriesQuery.toString(), options?.timeout), parameters).collect<any[]>()
         ]);
 
-        // SurrealDB's collect() returns an array of result arrays, one for each query.
+        // SurrealDB's returns an array of result arrays, one for each query.
         // If we passed a single query, it's [ [result1, result2, ...] ].
         countResult = (rawCountResult?.[0] || []) as any[];
         data = (rawData?.[0] || []) as any[];
@@ -437,11 +447,10 @@ export const ODataCRUDMethods = async (
                 : config.variables
         ) || [];
 
-        const tmo = tableConfig.timeout ?? config.timeout;
+        const timeout = tableConfig.timeout ?? config.timeout;
 
         idGenerator ??= async () => {
-            return db.query(withTimeoutPrefix('RETURN rand::ulid().lowercase()', tmo))
-                .collect<[string]>()
+            return db.query<[string]>('RETURN rand::ulid().lowercase()')
                 .then(r => r[0]);
         };
 
@@ -449,11 +458,11 @@ export const ODataCRUDMethods = async (
         if (req.method === "POST") {
             const newId = new RecordId(table, await idGenerator(item));
             delete item.id;
-            const results = await db.query(withTimeoutPrefix(`CREATE type::record($id) CONTENT $content`, tmo), {
+            const results = await db.query(withTimeout(`CREATE type::record($id) CONTENT $content`, timeout), {
                 id: newId,
                 content: item,
                 ...variables
-            }).collect();
+            });
             const popped = results.pop();
             result = Array.isArray(popped) && popped.length > 0 ? popped[0] : null;
         }
@@ -463,27 +472,27 @@ export const ODataCRUDMethods = async (
             // }
 
             delete item.id;
-            const results = await db.query(withTimeoutPrefix(`UPDATE type::record($id) MERGE $content`, tmo), {
+            const results = await db.query(withTimeout(`UPDATE type::record($id) MERGE $content`, timeout), {
                 id: rid,
                 content: item,
                 ...variables
-            }).collect();
+            });
             result = results.pop()[0];
         }
         else if (req.method === "PUT") {
             delete item.id;
-            const results = await db.query(withTimeoutPrefix(`UPSERT type::record($id) CONTENT $content`, tmo), {
+            const results = await db.query(withTimeout(`UPSERT type::record($id) CONTENT $content`, timeout), {
                 id: rid,
                 content: item,
                 ...variables
-            }).collect();
+            });
             result = results.pop()[0];
         }
         else if (req.method === "DELETE") {
-            const results = await db.query(withTimeoutPrefix(`DELETE type::record($id)`, tmo), {
+            const results = await db.query(withTimeout(`DELETE type::record($id)`, timeout), {
                 id: rid,
                 ...variables
-            }).collect();
+            });
             result = results.pop()[0];
         }
         else {
@@ -632,7 +641,7 @@ export const SurrealODataV4Middleware = (
                 }
             }
             const tmo = tableConfig.timeout ?? router.config.timeout;
-            let _r = await db.query(withTimeoutPrefix(query, tmo), {
+            let _r = await db.query(withTimeout(query, tmo), {
                 ...params,
                 id: new RecordId(table, id)
             }).collect<any[][]>();
