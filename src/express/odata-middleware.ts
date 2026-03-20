@@ -1,7 +1,7 @@
 import * as express from "express";
 import { route } from './util';
 
-import { RecordId, Surreal } from 'surrealdb';
+import { Decimal, Duration, RecordId, Surreal, Table, Uuid } from 'surrealdb';
 import { createQuery, SQLLang, type SqlOptions } from '../parser/main';
 import { renderQuery } from '../parser/query-renderer';
 import { ODataV4ParseError } from '../parser/utils';
@@ -76,6 +76,87 @@ const keepAllowedFields = (record: any, allowedPaths: string[]) => {
     }
 
     return result;
+};
+
+/**
+ * Transform field values based on fieldTypes configuration to SurrealDB primitives.
+ * Supports: datetime, date, duration, decimal, uuid, record, table
+ */
+const transformFieldTypes = (
+    record: any,
+    fieldTypes: Record<string, 'datetime' | 'date' | 'duration' | 'decimal' | 'uuid' | 'record' | 'table'>
+) => {
+    if (!record || typeof record !== 'object' || !fieldTypes) return record;
+
+    for (const [fieldPath, type] of Object.entries(fieldTypes)) {
+        const parts = fieldPath.split('.');
+        let current = record;
+
+        // Navigate to the parent object
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (current && typeof current === 'object') {
+                current = current[parts[i]];
+            } else {
+                current = undefined;
+                break;
+            }
+        }
+
+        if (!current || typeof current !== 'object') continue;
+
+        const fieldName = parts[parts.length - 1];
+        const value = current[fieldName];
+
+        // Skip if field doesn't exist or is null/undefined
+        if (value === null || value === undefined) continue;
+
+        try {
+            switch (type) {
+                case 'datetime':
+                case 'date':
+                    // Convert string/number to Date object - SurrealDB SDK handles Date serialization
+                    current[fieldName] = new Date(value);
+                    break;
+
+                case 'duration':
+                    // Convert string to Duration - SDK handles Duration serialization
+                    current[fieldName] = new Duration(value);
+                    break;
+
+                case 'decimal':
+                    // Convert string/number to Decimal - SDK handles Decimal serialization
+                    current[fieldName] = new Decimal(value);
+                    break;
+
+                case 'uuid':
+                    // Convert string to Uuid - SDK handles Uuid serialization
+                    current[fieldName] = new Uuid(value);
+                    break;
+
+                case 'record':
+                    // Convert string to RecordId - SDK handles RecordId serialization
+                    if (typeof value === 'string') {
+                        const [table, id] = value.split(':');
+                        if (table && id) {
+                            current[fieldName] = new RecordId(table, id);
+                        }
+                    }
+                    break;
+
+                case 'table':
+                    // Convert string to Table - SDK handles Table serialization
+                    current[fieldName] = new Table(value);
+                    break;
+            }
+        } catch (error) {
+            // Log error but don't fail the entire operation
+            console.error(`Failed to transform field ${fieldPath} to type ${type}:`, error);
+            console.error(`Value was:`, value);
+            console.error(`Error details:`, error);
+        }
+    }
+
+    return record;
 };
 
 const formatTimeoutValue = (timeout: string | number) => {
@@ -458,6 +539,12 @@ export const ODataCRUDMethods = async (
         if (req.method === "POST") {
             const newId = new RecordId(table, await idGenerator(item));
             delete item.id;
+
+            // Apply field type transformations if configured
+            if (tableConfig.fieldTypes) {
+                transformFieldTypes(item, tableConfig.fieldTypes);
+            }
+
             const results = await db.query(withTimeout(`CREATE type::record($id) CONTENT $content`, timeout), {
                 id: newId,
                 content: item,
@@ -472,6 +559,12 @@ export const ODataCRUDMethods = async (
             // }
 
             delete item.id;
+
+            // Apply field type transformations if configured
+            if (tableConfig.fieldTypes) {
+                transformFieldTypes(item, tableConfig.fieldTypes);
+            }
+
             const results = await db.query(withTimeout(`UPDATE type::record($id) MERGE $content`, timeout), {
                 id: rid,
                 content: item,
@@ -481,6 +574,12 @@ export const ODataCRUDMethods = async (
         }
         else if (req.method === "PUT") {
             delete item.id;
+
+            // Apply field type transformations if configured
+            if (tableConfig.fieldTypes) {
+                transformFieldTypes(item, tableConfig.fieldTypes);
+            }
+
             const results = await db.query(withTimeout(`UPSERT type::record($id) CONTENT $content`, timeout), {
                 id: rid,
                 content: item,

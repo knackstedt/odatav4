@@ -184,7 +184,12 @@ function formatParameterValue(value: any): string {
 function tokenize(sql: string): Token[] {
     const tokens: Token[] = [];
     const keywords = ['ORDER BY', 'GROUP BY', 'SELECT', 'FROM', 'WHERE', 'LIMIT', 'START', 'FETCH', 'AS', 'DESC', 'ASC'];
-    const operators = ['&&', '||', '>=', '<=', '!=', '=', '>', '<', '+', '-', '*', '/', '%'];
+    const operators = [
+        'CONTAINSNOT', 'CONTAINSALL', 'CONTAINSANY', 'CONTAINSNONE', 'CONTAINS',
+        'NOTINSIDE', 'ALLINSIDE', 'ANYINSIDE', 'NONEINSIDE', 'INSIDE',
+        'OUTSIDE', 'INTERSECTS',
+        '&&', '||', '>=', '<=', '!=', '==', '?=', '*=', '=', '>', '<', '+', '-', '*', '/', '%', '**'
+    ];
 
     let i = 0;
 

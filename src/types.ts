@@ -205,6 +205,15 @@ class ODataExpressTableConfig<T = unknown> {
     fieldAliases?: Record<string, string>;
 
     /**
+     * Field type mappings for SurrealDB primitives that JSON doesn't natively support.
+     * Maps field names to their SurrealDB type constructors.
+     * Supported types: 'datetime', 'date', 'duration', 'decimal', 'uuid', 'record', 'table'
+     * Example: { "createdAt": "datetime", "userId": "record", "price": "decimal" }
+     * The middleware will automatically wrap values in the appropriate type constructor.
+     */
+    fieldTypes?: Record<string, 'datetime' | 'date' | 'duration' | 'decimal' | 'uuid' | 'record' | 'table'>;
+
+    /**
      * Hook that is called before record(s) are fetched (GET).
      * May be used to perform additional validation, logging, etc.
      */
