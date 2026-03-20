@@ -7,19 +7,31 @@
   <as-split direction="vertical" [gutterSize]="6">
     <!-- Top Panel: Query Input -->
     <as-split-area [size]="35" [minSize]="25">
-      <ng-scrollbar>
+      <ng-scrollbar orientation="vertical">
         <div class="input-section">
           <p-card>
             <div class="config-row">
               <div class="config-field">
-                <label for="endpoint">API Endpoint</label>
-                <input
-                  pInputText
-                  id="endpoint"
-                  [(ngModel)]="apiEndpoint"
-                  placeholder="http://localhost:3000/api/odata/users"
-                  class="w-full"
-                />
+                <label for="endpoint">API Endpoint (URL, path, or query params)</label>
+                <div class="input-with-button">
+                  <input
+                    pInputText
+                    id="endpoint"
+                    [(ngModel)]="apiEndpoint"
+                    placeholder="Full URL, /path?params, or $filter=...&$select=..."
+                    class="w-full"
+                  />
+                  <button
+                    type="button"
+                    class="paste-button"
+                    (click)="pasteFromClipboard()"
+                    aria-label="Paste from clipboard"
+                    title="Paste from clipboard"
+                  >
+                    <i class="pi pi-clipboard"></i>
+                    <span class="button-text">Paste</span>
+                  </button>
+                </div>
               </div>
 
               <div class="config-field config-field-small">
@@ -70,7 +82,7 @@
                         installationLocation="lib/monaco/vs"
                         language="odata-query"
                         theme="vs-dark"
-                        [minimapEnabled]="false"
+                        [minimap]="{ enabled: false }"
                         lineNumbers="off"
                         [customLanguage]="ODataQueryLanguage"
                     />
@@ -85,98 +97,121 @@
 
     <!-- Bottom Panel: Results -->
     <as-split-area [size]="65" [minSize]="35">
-      <ng-scrollbar>
         <div class="results-section">
-          <p-card>
             @if (error()) {
               <p-message severity="error" [text]="error()!" styleClass="error-message" />
             }
 
             <p-tabs [(value)]="activeTab">
-              <p-tabpanel [value]="0">
-                <ng-template pTemplate="header">
-                  <i class="pi pi-code"></i>
-                  <span>Generated Query</span>
-                </ng-template>
+                <p-tablist>
+                    <p-tab [value]="0">Info</p-tab>
+                    <p-tab [value]="1">Response</p-tab>
+                </p-tablist>
 
-                @if (queryResult()) {
-                  <div class="query-output">
-                    <div class="output-header">
-                      <span class="dialect-badge">{{ getDialectLabel() }}</span>
-                      <div class="output-options">
-                        <label class="checkbox-label">
-                          <input
-                            type="checkbox"
-                            [(ngModel)]="substituteParams"
-                            class="checkbox-input"
-                          />
-                          <span>Substitute Parameters</span>
-                        </label>
-                        <label class="checkbox-label">
-                          <input
-                            type="checkbox"
-                            [(ngModel)]="simplifyQuery"
-                            class="checkbox-input"
-                          />
-                          <span>Simplify Query</span>
-                        </label>
-                      </div>
-                    </div>
+                <p-tabpanels>
+                    <p-tabpanel [value]="0">
+                        <ng-template pTemplate="header">
+                        <i class="pi pi-code"></i>
+                        <span>Generated Query</span>
+                        </ng-template>
 
-                    <ngx-monaco-editor
-                        style="height: 600px;"
-                        [code]="queryResult()!.generatedQuery"
-                        (codeChange)="generateQueryClientSide()"
-                        installationLocation="lib/monaco/vs"
-                        language="surrealql"
-                        theme="vs-dark"
-                        [minimapEnabled]="false"
-                        lineNumbers="off"
-                        wordWrap="on"
-                        [customLanguage]="SurrealQLLanguage"
-                    />
+                        @if (queryResult()) {
+                        <div class="query-output">
+                            <div class="output-header">
+                            <span class="dialect-badge">{{ getDialectLabel() }}</span>
+                            <div class="output-options">
+                                <label class="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    [(ngModel)]="substituteParams"
+                                    class="checkbox-input"
+                                />
+                                <span>Substitute Parameters</span>
+                                </label>
+                                <label class="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    [(ngModel)]="simplifyQuery"
+                                    class="checkbox-input"
+                                />
+                                <span>Simplify Query</span>
+                                </label>
+                                <p-button
+                                label="Copy"
+                                icon="pi pi-copy"
+                                (onClick)="copyQueryToClipboard()"
+                                styleClass="copy-button"
+                                />
+                            </div>
+                            </div>
 
-                    @if (queryResult()!.parameters && Object.keys(queryResult()!.parameters!).length > 0) {
-                      <div class="parameters-section">
-                        <h4>Parameters</h4>
-                        <pre class="code-block"><code>{{ formatJson(queryResult()!.parameters) }}</code></pre>
-                      </div>
-                    }
-                  </div>
-                } @else {
-                  <div class="empty-state">
-                    <i class="pi pi-info-circle"></i>
-                    <p>Enter query parameters above to generate SQL</p>
-                  </div>
-                }
-              </p-tabpanel>
+                            <div class="query-content">
+                            <div class="query-editor">
+                                <ngx-monaco-editor
+                                    style="height: 100%;"
+                                    [code]="queryResult()!.generatedQuery"
+                                    (codeChange)="generateQueryClientSide()"
+                                    installationLocation="lib/monaco/vs"
+                                    language="surrealql"
+                                    theme="vs-dark"
+                                    [minimapEnabled]="false"
+                                    lineNumbers="off"
+                                    wordWrap="on"
+                                    [customLanguage]="SurrealQLLanguage"
+                                />
+                            </div>
 
-              <p-tabpanel [value]="1">
-                <ng-template pTemplate="header">
-                  <i class="pi pi-database"></i>
-                  <span>Response Data</span>
-                </ng-template>
+                            @if (queryResult()!.parameters && Object.keys(queryResult()!.parameters!).length > 0) {
+                                <div class="parameters-panel">
+                                <h4>Parameters</h4>
+                                <ngx-monaco-editor
+                                    style="height: 100%;"
+                                    [code]="formatJson(queryResult()!.parameters)"
+                                    installationLocation="lib/monaco/vs"
+                                    language="json"
+                                    theme="vs-dark"
+                                    [minimapEnabled]="false"
+                                    lineNumbers="off"
+                                    wordWrap="on"
+                                    [readOnly]="true"
+                                />
+                                </div>
+                            }
+                            </div>
+                        </div>
+                        } @else {
+                        <div class="empty-state">
+                            <i class="pi pi-info-circle"></i>
+                            <p>Enter query parameters above to generate SQL</p>
+                        </div>
+                        }
+                    </p-tabpanel>
 
-                @if (loading()) {
-                  <div class="loading-state">
-                    <p-progressSpinner />
-                    <p>Executing query...</p>
-                  </div>
-                } @else if (queryResult()?.responseData) {
-                  <div class="response-output">
-                    <pre class="code-block"><code>{{ formatJson(queryResult()!.responseData) }}</code></pre>
-                  </div>
-                } @else {
-                  <div class="empty-state">
-                    <i class="pi pi-info-circle"></i>
-                    <p>Click "Execute" to fetch data from the API</p>
-                  </div>
-                }
-              </p-tabpanel>
+                    <!-- <p-tabpanel [value]="1">
+                        <ng-template pTemplate="header">
+                        <i class="pi pi-database"></i>
+                        <span>Response Data</span>
+                        </ng-template>
+
+                        @if (loading()) {
+                        <div class="loading-state">
+                            <p-progressSpinner />
+                            <p>Executing query...</p>
+                        </div>
+                        } @else if (queryResult()?.responseData) {
+                        <div class="response-output">
+                            <pre class="code-block"><code>{{ formatJson(queryResult()!.responseData) }}</code></pre>
+                        </div>
+                        } @else {
+                        <div class="empty-state">
+                            <i class="pi pi-info-circle"></i>
+                            <p>Click "Execute" to fetch data from the API</p>
+                        </div>
+                        }
+                    </p-tabpanel> -->
+                </p-tabpanels>
             </p-tabs>
-          </p-card>
         </div>
-      </ng-scrollbar>
     </as-split-area>
   </as-split>
 </div>

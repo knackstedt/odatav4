@@ -34,10 +34,24 @@ as-split-area {
   overflow: hidden;
 }
 
-.input-section,
+.input-section {
+  padding: 1rem;
+  height: 100%;
+}
+
 .results-section {
   padding: 1rem;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+
+  p-tabs {
+    flex: 1 0 100%;
+
+    p-tabpanels {
+        flex: 1
+    }
+  }
 }
 
 p-card {
@@ -49,19 +63,29 @@ p-card {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
 
     .p-card-body {
       height: 100%;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     .p-card-content {
       flex: 1;
-      overflow: auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
   }
 }
+
+.input-section p-card ::ng-deep .p-card-content {
+  overflow: auto;
+}
+
 
 // Config row for endpoint, table, dialect, and execute button
 .config-row {
@@ -91,6 +115,16 @@ p-card {
 .config-actions {
   display: flex;
   align-items: flex-end;
+}
+
+.input-with-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  input {
+    flex: 1;
+  }
 }
 
 // Query parameters grid with Monaco editors
@@ -196,6 +230,46 @@ p-card {
     }
   }
 
+  // Paste button styling
+  .paste-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.85rem;
+    white-space: nowrap;
+
+    i {
+      font-size: 1rem;
+    }
+
+    .button-text {
+      font-weight: 500;
+    }
+
+    &:hover:not(:disabled) {
+      color: var(--primary);
+      background: rgba(255, 179, 128, 0.1);
+      border-color: var(--primary);
+    }
+
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(255, 179, 128, 0.2);
+    }
+
+    &:active {
+      transform: scale(0.98);
+    }
+  }
+
   // Themed split panel handles
   as-split-gutter {
     background: var(--bg-secondary) !important;
@@ -280,15 +354,68 @@ p-card {
     .p-tabs-panels {
       background: transparent;
       padding: 1.5rem 0;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .p-tabpanel {
+        height: 100%;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
   }
 }
+
+
 
 .query-output,
 .response-output {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.query-content {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+.query-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.parameters-panel {
+  flex: 0 0 350px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+
+  h4 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.5rem 0;
+    flex-shrink: 0;
+  }
+
+  ngx-monaco-editor {
+    flex: 1;
+    min-height: 0;
+  }
 }
 
 .output-header {

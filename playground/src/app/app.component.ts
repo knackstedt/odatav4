@@ -12,7 +12,7 @@ import { MessageModule } from 'primeng/message';
 import { PanelModule } from 'primeng/panel';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
-import { TabsModule } from 'primeng/tabs';
+import { Tab, TabList, TabPanel, TabPanels, Tabs } from 'primeng/tabs';
 import { createQuery } from '../../../src/parser/main';
 import { renderQuery } from '../../../src/parser/query-renderer';
 import { SQLLang } from '../../../src/parser/visitors/types';
@@ -56,8 +56,12 @@ declare const monaco: any;
         PanelModule,
         MessageModule,
         ProgressSpinnerModule,
-        TabsModule,
-        MonacoEditorComponent
+        MonacoEditorComponent,
+        Tabs,
+        TabList,
+        Tab,
+        TabPanels,
+        TabPanel,
     ],
     templateUrl: './app.component.html',
     styleUrl: './app.component.scss',
@@ -97,6 +101,7 @@ export class AppComponent implements AfterViewInit {
 
   private editors: Map<string, any> = new Map();
   private monacoLoaded = false;
+  private lastParsedUrl = '';
 
   constructor(private http: HttpClient) {
     effect(() => {
@@ -105,6 +110,15 @@ export class AppComponent implements AfterViewInit {
       const substitute = this.substituteParams();
       const simplify = this.simplifyQuery();
       this.generateQueryClientSide();
+    });
+
+    effect(() => {
+      const endpoint = this.apiEndpoint();
+      // Only parse if the URL has actually changed
+      if (endpoint !== this.lastParsedUrl) {
+        this.lastParsedUrl = endpoint;
+        this.parseUrlAndPopulateParams(endpoint);
+      }
     });
   }
 
@@ -167,6 +181,94 @@ export class AppComponent implements AfterViewInit {
     if (index !== -1) {
       params[index].value = value;
       this.queryParams.set([...params]);
+    }
+  }
+
+  private isParsingUrl = false;
+
+  private parseUrlAndPopulateParams(urlString: string) {
+    if (this.isParsingUrl) return;
+
+    this.isParsingUrl = true;
+
+    try {
+      let searchParams: URLSearchParams;
+      let pathname: string | null = null;
+      let origin: string | null = null;
+
+      // Case 1: Try parsing as full URL (http://localhost:3000/api/odata/users?$filter=...)
+      try {
+        const url = new URL(urlString);
+        searchParams = url.searchParams;
+        pathname = url.pathname;
+        origin = url.origin;
+      } catch {
+        // Case 2: Check if it's a path with query params (/api/odata/users?$filter=...)
+        if (urlString.includes('/') && urlString.includes('?')) {
+          const [path, query] = urlString.split('?');
+          pathname = path;
+          searchParams = new URLSearchParams(query);
+        }
+        // Case 3: Check if it's just query parameters ($filter=...&$select=...)
+        else if (urlString.includes('=') && (urlString.startsWith('$') || urlString.includes('&$'))) {
+          searchParams = new URLSearchParams(urlString);
+        }
+        // Case 4: Path only without query params
+        else if (urlString.includes('/')) {
+          pathname = urlString;
+          searchParams = new URLSearchParams();
+        }
+        else {
+          // Not a recognized format
+          this.isParsingUrl = false;
+          return;
+        }
+      }
+
+      // Extract table name from pathname if available
+      if (pathname) {
+        const pathSegments = pathname.split('/').filter(s => s);
+        if (pathSegments.length > 0) {
+          const lastSegment = pathSegments[pathSegments.length - 1];
+          this.tableName.set(lastSegment);
+        }
+
+        // Update endpoint to base URL if we have origin and pathname
+        if (origin) {
+          const baseEndpoint = `${origin}${pathname}`;
+          if (baseEndpoint !== urlString) {
+            this.lastParsedUrl = baseEndpoint;
+            this.apiEndpoint.set(baseEndpoint);
+          }
+        }
+      }
+
+      // Parse and populate query parameters
+      const params = this.queryParams();
+      let hasParams = false;
+
+      params.forEach((param, index) => {
+        const value = searchParams.get(param.key);
+        if (value !== null) {
+          hasParams = true;
+          params[index].value = decodeURIComponent(value);
+
+          // Update Monaco editor if it exists
+          const editor = this.editors.get(param.key);
+          if (editor) {
+            editor.setValue(params[index].value);
+          }
+        }
+      });
+
+      if (hasParams) {
+        this.queryParams.set([...params]);
+      }
+
+    } catch (e) {
+      // Parsing failed, ignore
+    } finally {
+      this.isParsingUrl = false;
     }
   }
 
@@ -273,5 +375,29 @@ export class AppComponent implements AfterViewInit {
 
   getDialectLabel(): string {
     return this.dialects.find(d => d.value === this.selectedDialect())?.label || '';
+  }
+
+  async pasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        this.apiEndpoint.set(text.trim());
+      }
+    } catch (err) {
+      console.error('Failed to read clipboard:', err);
+      this.error.set('Failed to read from clipboard. Please grant clipboard permissions.');
+    }
+  }
+
+  async copyQueryToClipboard() {
+    try {
+      const query = this.queryResult()?.generatedQuery;
+      if (query) {
+        await navigator.clipboard.writeText(query);
+      }
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      this.error.set('Failed to copy to clipboard. Please grant clipboard permissions.');
+    }
   }
 }

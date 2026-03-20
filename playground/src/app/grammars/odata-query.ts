@@ -94,9 +94,9 @@ export function init(monaco: typeof Monaco) {
                     }
                 }],
 
-                [/[a-z_][a-z0-9_]*::[a-z_][a-z0-9_]*/i, 'predefined.namespace'],
+                [/[a-z_][a-zA-Z0-9_]*::[a-z_][a-zA-Z0-9_]*/i, 'predefined.namespace'],
 
-                [/[a-z_][a-z0-9_]*\/[a-z_][a-z0-9_.]*/i, 'type.qualified'],
+                [/[a-z_][a-zA-Z0-9_]*\/[a-z_][a-zA-Z0-9.]*/i, 'type.qualified'],
 
                 [/Edm\.[A-Z][a-zA-Z0-9]*/, {
                     cases: {
@@ -105,7 +105,7 @@ export function init(monaco: typeof Monaco) {
                     }
                 }],
 
-                [/[a-z_][a-z0-9_.]*/, {
+                [/[a-z_][a-zA-Z0-9_.]*/, {
                     cases: {
                         '@logicalOperators': 'keyword.operator',
                         '@comparisonOperators': 'operator.comparison',
