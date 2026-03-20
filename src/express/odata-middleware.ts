@@ -462,7 +462,7 @@ export const ODataCRUDMethods = async (
                 id: newId,
                 content: item,
                 ...variables
-            });
+            }).collect();
             const popped = results.pop();
             result = Array.isArray(popped) && popped.length > 0 ? popped[0] : null;
         }
@@ -476,7 +476,7 @@ export const ODataCRUDMethods = async (
                 id: rid,
                 content: item,
                 ...variables
-            });
+            }).collect();
             result = results.pop()[0];
         }
         else if (req.method === "PUT") {
@@ -485,14 +485,14 @@ export const ODataCRUDMethods = async (
                 id: rid,
                 content: item,
                 ...variables
-            });
+            }).collect();
             result = results.pop()[0];
         }
         else if (req.method === "DELETE") {
             const results = await db.query(withTimeout(`DELETE type::record($id)`, timeout), {
                 id: rid,
                 ...variables
-            });
+            }).collect();
             result = results.pop()[0];
         }
         else {
