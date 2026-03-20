@@ -36,6 +36,25 @@ interface ODataMetadata {
     [schemaName: string]: ODataSchema | any;
 }
 
+type SurrealTableStructure = {
+    fields: {
+        kind: string,
+        name: string,
+        permissions: {},
+        readonly: boolean,
+        table: string,
+        default?: string,
+        default_always?: boolean,
+        assert?: string,
+    }[];
+    indexes: {
+        name: string,
+        index: "" | "UNIQUE",
+        cols: string[],
+        table: string
+    }[];
+};
+
 /**
  * Generate OData V4 Metadata for a given ODataExpressTable based on its SurrealDB table structure.
  * @param db SurrealDB instance
@@ -43,7 +62,7 @@ interface ODataMetadata {
  * @returns OData Metadata object
  */
 export const getODataMetadata = async (db: Surreal, table: ODataExpressTable<any>) => {
-    const [{ fields }] = await db.query(`INFO FOR TABLE \`${table.table.replace(/`/g, '\\`')}\``).collect<[{ fields: { [key: string]: string; }; }]>();
+    const [{ fields }] = await db.query(`INFO FOR TABLE $table STRUCTURE`, { table: table.table }).collect<[SurrealTableStructure]>();
 
     const entityTypeName = `core.${table.table}`;
     const entityType: ODataEntityType = {
@@ -52,8 +71,7 @@ export const getODataMetadata = async (db: Surreal, table: ODataExpressTable<any
     };
 
     Object.entries(fields).forEach(([field, info]) => {
-        const typeMatch = info.match(/TYPE (?<typeString>.+?)(?:\s+(?:READONLY|PERMISSIONS|DEFAULT|VALUE|ASSERT)|$)/);
-        const typeString = typeMatch?.groups?.typeString || 'any';
+        const typeString = info.kind || 'any';
 
         const processTypeToOData = (typeStr: string): { type: string; nullable: boolean; collection: boolean; maxLength?: number } => {
             let nullable = false;
