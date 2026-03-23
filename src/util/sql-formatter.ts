@@ -89,10 +89,13 @@ export function formatSurrealQL(sql: string, options: FormatOptions = {}): strin
                 result += ', \n' + indent.repeat(baseDepth);
             }
         } else {
+            const prevIsCast = prevToken && prevToken.type === 'identifier' && prevToken.value.startsWith('<') && prevToken.value.endsWith('>');
+
             const needsSpace = prevToken &&
                 prevToken.type !== 'paren' &&
                 prevToken.value !== '(' &&
                 prevToken.type !== 'other' &&
+                !prevIsCast &&
                 !result.endsWith(' ') &&
                 !result.endsWith('\n');
 
@@ -213,6 +216,22 @@ function tokenize(sql: string): Token[] {
             }
         }
         if (matched) continue;
+
+        // Handle SurrealDB type cast syntax: <datetime>, <number>, etc.
+        if (sql[i] === '<' && /[a-z]/i.test(sql[i + 1])) {
+            let cast = '<';
+            i++;
+            while (i < sql.length && sql[i] !== '>') {
+                cast += sql[i];
+                i++;
+            }
+            if (i < sql.length && sql[i] === '>') {
+                cast += sql[i];
+                i++;
+                tokens.push({ type: 'identifier', value: cast });
+                continue;
+            }
+        }
 
         if (sql[i] === "'" || sql[i] === '"' || sql[i] === '`') {
             const quote = sql[i];
