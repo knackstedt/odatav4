@@ -146,38 +146,44 @@
                             </div>
 
                             <div class="query-content">
-                            <div class="query-editor">
-                                <ngx-monaco-editor
-                                    style="height: 100%;"
-                                    [code]="queryResult()!.generatedQuery"
-                                    (codeChange)="generateQueryClientSide()"
-                                    installationLocation="lib/monaco/vs"
-                                    language="surrealql"
-                                    theme="vs-dark"
-                                    [minimapEnabled]="false"
-                                    lineNumbers="off"
-                                    wordWrap="on"
-                                    [customLanguage]="SurrealQLLanguage"
-                                />
-                            </div>
+                      <as-split direction="horizontal" [gutterSize]="6">
+                        <as-split-area [size]="70" [minSize]="40">
+                          <div class="query-editor">
+                            <ngx-monaco-editor
+                                style="height: 100%;"
+                                [code]="queryResult()!.generatedQuery"
+                                (codeChange)="generateQueryClientSide()"
+                                installationLocation="lib/monaco/vs"
+                                language="surrealql"
+                                theme="vs-dark"
+                                [minimapEnabled]="false"
+                                lineNumbers="off"
+                                wordWrap="on"
+                                [customLanguage]="SurrealQLLanguage"
+                            />
+                          </div>
+                        </as-split-area>
 
-                            @if (queryResult()!.parameters && Object.keys(queryResult()!.parameters!).length > 0) {
-                                <div class="parameters-panel">
-                                <h4>Parameters</h4>
-                                <ngx-monaco-editor
-                                    style="height: 100%;"
-                                    [code]="formatJson(queryResult()!.parameters)"
-                                    installationLocation="lib/monaco/vs"
-                                    language="json"
-                                    theme="vs-dark"
-                                    [minimapEnabled]="false"
-                                    lineNumbers="off"
-                                    wordWrap="on"
-                                    [readOnly]="true"
-                                />
-                                </div>
-                            }
+                        @if (queryResult()!.parameters && Object.keys(queryResult()!.parameters!).length > 0) {
+                          <as-split-area [size]="30" [minSize]="20">
+                            <div class="parameters-panel">
+                              <ngx-monaco-editor
+                                  style="height: 100%;"
+                                  [code]="formatJson(queryResult()!.parameters)"
+                                  installationLocation="lib/monaco/vs"
+                                  language="json"
+                                  theme="vs-dark"
+                                  [minimapEnabled]="false"
+                                  [minimap]="{ enabled: false }"
+                                  lineNumbers="off"
+                                  wordWrap="on"
+                                  [readOnly]="true"
+                              />
                             </div>
+                          </as-split-area>
+                        }
+                      </as-split>
+                    </div>
                         </div>
                         } @else {
                         <div class="empty-state">
