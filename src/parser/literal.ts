@@ -99,4 +99,21 @@ export class Literal {
         const recordId = decoded.slice(2, -1);
         return recordId;
     }
+    'Edm.PrefixedDate'(value: string) {
+        // Extract the date from d"2024-01-15", d'2024-01-15', or d`2024-01-15`
+        // Keep as string to preserve nanosecond precision - SurrealDB SDK will handle conversion
+        const decoded = decodeURIComponent(value);
+        // Remove d prefix and surrounding quotes (can be ", ', or `)
+        const dateStr = decoded.slice(2, -1);
+        return dateStr;
+    }
+    'Edm.PrefixedNumber'(value: string) {
+        // Extract the number from n"123.45", n'123.45', or n`123.45`
+        // Keep as string to preserve precision for decimals and large integers
+        // SurrealDB SDK will handle conversion
+        const decoded = decodeURIComponent(value);
+        // Remove n prefix and surrounding quotes (can be ", ', or `)
+        const numStr = decoded.slice(2, -1);
+        return numStr;
+    }
 }

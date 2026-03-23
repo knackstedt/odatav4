@@ -368,6 +368,22 @@ export class SurrealDbVisitor extends Visitor {
                     value = new RecordId(table, id);
                 }
             }
+            else if (node.value === 'Edm.PrefixedDate') {
+                // value is a date string from the literal converter
+                // Use <datetime> cast to preserve nanosecond precision
+                context.literal = value;
+                this.parameters.set(name, value);
+                this[target] += `<datetime>${name}`;
+                return;
+            }
+            else if (node.value === 'Edm.PrefixedNumber') {
+                // value is a number string from the literal converter
+                // Use <number> cast to preserve decimal precision and handle large integers
+                context.literal = value;
+                this.parameters.set(name, value);
+                this[target] += `<number>${name}`;
+                return;
+            }
             else if (node.value === 'Edm.GeographyPoint') {
                 const match = node.raw.match(/'Point\(([^)]+)\)'/);
                 if (match) {

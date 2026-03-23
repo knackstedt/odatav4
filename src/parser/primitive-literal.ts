@@ -159,29 +159,25 @@ export namespace PrimitiveLiteral {
         }
         return token;
     }
-    export function recordIdValue(value: Utils.SourceArray, index: number): Lexer.Token {
+    export function prefixedLiteralValue(value: Utils.SourceArray, index: number, prefix: number, edmType: string): Lexer.Token {
         let start = index;
 
-        // Check if starts with 'r' prefix
-        if (value[index] !== 0x72) return; // 'r'
+        // Check if starts with the specified prefix
+        if (value[index] !== prefix) return;
         index++;
 
-        // Check for quote type after 'r'
-        let quoteType: 'single' | 'double' | 'backtick' | null = null;
+        // Check for quote type after prefix
         let quoteChar: number;
 
         if (value[index] === 0x27) { // single quote '
-            quoteType = 'single';
             quoteChar = 0x27;
             index++;
         }
         else if (value[index] === 0x22) { // double quote "
-            quoteType = 'double';
             quoteChar = 0x22;
             index++;
         }
         else if (value[index] === 0x60) { // backtick `
-            quoteType = 'backtick';
             quoteChar = 0x60;
             index++;
         }
@@ -194,7 +190,7 @@ export namespace PrimitiveLiteral {
             if (value[index] === quoteChar) {
                 // Found closing quote
                 index++;
-                return Lexer.tokenize(value, start, index, "Edm.RecordId", Lexer.TokenType.Literal);
+                return Lexer.tokenize(value, start, index, edmType, Lexer.TokenType.Literal);
             }
             // Advance by one character
             index++;
@@ -202,6 +198,18 @@ export namespace PrimitiveLiteral {
 
         // Reached end of input without finding closing quote
         return;
+    }
+
+    export function recordIdValue(value: Utils.SourceArray, index: number): Lexer.Token {
+        return PrimitiveLiteral.prefixedLiteralValue(value, index, 0x72, "Edm.RecordId"); // 'r'
+    }
+
+    export function prefixedDateValue(value: Utils.SourceArray, index: number): Lexer.Token {
+        return PrimitiveLiteral.prefixedLiteralValue(value, index, 0x64, "Edm.PrefixedDate"); // 'd'
+    }
+
+    export function prefixedNumberValue(value: Utils.SourceArray, index: number): Lexer.Token {
+        return PrimitiveLiteral.prefixedLiteralValue(value, index, 0x6e, "Edm.PrefixedNumber"); // 'n'
     }
 
     export function stringValue(value: Utils.SourceArray, index: number): Lexer.Token {
@@ -803,6 +811,8 @@ export namespace PrimitiveLiteral {
             PrimitiveLiteral.int32Value(value, index) ||
             PrimitiveLiteral.int64Value(value, index) ||
             PrimitiveLiteral.recordIdValue(value, index) ||
+            PrimitiveLiteral.prefixedDateValue(value, index) ||
+            PrimitiveLiteral.prefixedNumberValue(value, index) ||
             PrimitiveLiteral.stringValue(value, index) ||
             PrimitiveLiteral.durationValue(value, index) ||
             PrimitiveLiteral.binaryValue(value, index) ||
