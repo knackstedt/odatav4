@@ -290,7 +290,7 @@ describe("Field Aliases Middleware Integration", () => {
             const queryStr = entriesQuery[0].toString();
             expect(queryStr).toContain("->on->finding");
             expect(queryStr).toContain("ownerId = 'user123'");
-            expect(queryStr).toContain("&&"); // Combined with AND
+            expect(queryStr).toContain("AND"); // Combined with AND
         });
     });
 

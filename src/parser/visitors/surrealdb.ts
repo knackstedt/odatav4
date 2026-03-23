@@ -109,10 +109,16 @@ export class SurrealDbVisitor extends Visitor {
             this.checkParameterLimit();
             const seed = `$param${this.parameterSeed++}`;
             this.parameters.set(seed, value);
-            items.push(seed);
 
-            if (typeof value == "string" && /(?<=[^\\]|^):/.test(value)) {
+            // Wrap with appropriate type cast based on literal type
+            if (item.value === 'Edm.RecordId') {
                 items.push(`type::record(${seed})`);
+            } else if (item.value === 'Edm.PrefixedDate') {
+                items.push(`<datetime>${seed}`);
+            } else if (item.value === 'Edm.PrefixedNumber') {
+                items.push(`<number>${seed}`);
+            } else {
+                items.push(seed);
             }
         }
         this.where += items.join(", ");
@@ -378,54 +384,72 @@ export class SurrealDbVisitor extends Visitor {
         this[target] += "$this";
     }
 
-    /**
-     * Helper method to convert literal values with proper type handling for SurrealDB
-     * Handles RecordId, PrefixedDate, and PrefixedNumber conversions
-     * All are kept as strings for clean JSON serialization and wrapped with type casts in queries
-     */
-    private convertLiteralValue(literalNode: Lexer.Token): any {
-        let value = Literal.convert(literalNode.value, literalNode.raw);
-
-        // RecordId, PrefixedDate, and PrefixedNumber are all kept as strings
-        // They will be wrapped with type casts when added to the query:
-        // - RecordId: type::record($param)
-        // - PrefixedDate: <datetime>$param
-        // - PrefixedNumber: <number>$param
-
-        return value;
-    }
-
     protected VisitMethodCallExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         const method = node.value.method;
         const params = node.value.parameters || [];
-        this.checkParameterLimit();
-        const name = `$param${this.parameterSeed++}`;
 
         switch (method) {
             case "contains":
                 // Use SurrealDB's native CONTAINS operator
                 this.Visit(params[0], context);
                 this[target] += ' CONTAINS ';
-                let value = this.convertLiteralValue(params[1]);
-                this.parameters.set(name, value);
-                this[target] += name;
+                // Check if it's a literal that needs special handling
+                if (params[1].type === Lexer.TokenType.Literal) {
+                    this.checkParameterLimit();
+                    const name = `$param${this.parameterSeed++}`;
+                    const literalValue = Literal.convert(params[1].value, params[1].raw);
+                    this.parameters.set(name, literalValue);
+                    if (params[1].value === 'Edm.RecordId') {
+                        this[target] += `type::record(${name})`;
+                    } else if (params[1].value === 'Edm.String') {
+                        this[target] += `type::string(${name})`;
+                    } else {
+                        this[target] += name;
+                    }
+                } else {
+                    this.Visit(params[1], context);
+                }
                 break;
             case "endswith":
                 this[target] += 'string::ends_with(';
                 this.Visit(params[0], context);
-
-                let value2 = this.convertLiteralValue(params[1]);
-                this.parameters.set(name, value2);
-                this[target] += `, type::string(${name}))`;
+                this[target] += ', ';
+                // Check if it's a literal that needs special handling
+                if (params[1].type === Lexer.TokenType.Literal) {
+                    this.checkParameterLimit();
+                    const name = `$param${this.parameterSeed++}`;
+                    const literalValue = Literal.convert(params[1].value, params[1].raw);
+                    this.parameters.set(name, literalValue);
+                    if (params[1].value === 'Edm.RecordId') {
+                        this[target] += `type::record(${name})`;
+                    } else {
+                        this[target] += `type::string(${name})`;
+                    }
+                } else {
+                    this.Visit(params[1], context);
+                }
+                this[target] += ')';
                 break;
             case "startswith":
                 this[target] += 'string::starts_with(';
                 this.Visit(params[0], context);
-
-                let value3 = this.convertLiteralValue(params[1]);
-                this.parameters.set(name, value3);
-                this[target] += `, type::string(${name}))`;
+                this[target] += ', ';
+                // Check if it's a literal that needs special handling
+                if (params[1].type === Lexer.TokenType.Literal) {
+                    this.checkParameterLimit();
+                    const name = `$param${this.parameterSeed++}`;
+                    const literalValue = Literal.convert(params[1].value, params[1].raw);
+                    this.parameters.set(name, literalValue);
+                    if (params[1].value === 'Edm.RecordId') {
+                        this[target] += `type::record(${name})`;
+                    } else {
+                        this[target] += `type::string(${name})`;
+                    }
+                } else {
+                    this.Visit(params[1], context);
+                }
+                this[target] += ')';
                 break;
             case "indexof":
                 this[target] += "(IF type::string(";

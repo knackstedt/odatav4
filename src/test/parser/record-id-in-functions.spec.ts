@@ -14,6 +14,9 @@ describe('Record ID in Function Arguments', () => {
         const paramValues = Array.from(result.parameters.values());
         const recordIdParam = paramValues.find(v => typeof v === 'string' && v.includes('scan:'));
         expect(recordIdParam).toBe('scan:h85bfmbybo1mzctsszakry98ge');
+
+        // Verify the WHERE clause wraps the parameter with type::record()
+        expect(result.where).toContain('CONTAINS type::record(');
     });
 
     test('should convert RecordId with single quotes', () => {

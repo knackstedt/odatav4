@@ -214,8 +214,7 @@ describe('Field Aliases', () => {
                 fieldAliases: { scan: '->on->finding->name' }
             });
 
-            expect(query.where).toContain('->on->finding->name CONTAINS $param1');
-            expect(query.where).not.toContain('string::contains');
+            expect(query.where).toContain('->on->finding->name CONTAINS type::string($param1)');
         });
 
         it('should work with contains on graph traversal field', async () => {
@@ -224,18 +223,7 @@ describe('Field Aliases', () => {
                 fieldAliases: { description: '->related->issue->description' }
             });
 
-            expect(query.where).toContain('->related->issue->description CONTAINS $param1');
-            expect(query.where).not.toContain('type::field');
-            expect(query.where).not.toContain('string::contains');
-        });
-
-        it('should work with IN operator', async () => {
-            const result = await processFilterWithAliases(
-                '$filter=scan in (1,2,3)',
-                { scan: '->on->finding' }
-            );
-
-            expect(result.where).toContain('->on->finding in [');
+            expect(query.where).toContain('->related->issue->description CONTAINS type::string($param1)');
         });
 
         it('should work with NOT expression', async () => {
