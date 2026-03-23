@@ -1,4 +1,3 @@
-import { RecordId } from 'surrealdb';
 import Lexer from '../lexer';
 import { Literal } from "../literal";
 import { SQLLang, type SqlOptions } from "./types";
@@ -51,71 +50,8 @@ export class SurrealDbVisitor extends Visitor {
             return;
         }
 
-        const isRightLiteral = right && (right.type == Lexer.TokenType.Literal || (right.type as any) == "Literal");
-        const isRightPotentialId = isRightLiteral && (
-            (right.value == "Edm.String" && /(?<=[^\\]|^):/.test(right.raw)) ||
-            (typeof right.value == "string" && (right.value as string).startsWith("Edm.Int")) ||
-            (typeof right.value == "string" && ["Edm.SByte", "Edm.Byte", "Edm.Decimal", "Edm.Double", "Edm.Single"].includes(right.value as string)) ||
-            typeof right.value == "number"
-        );
-        const isLeftLiteral = left && (left.type == Lexer.TokenType.Literal || (left.type as any) == "Literal");
-        const isLeftPotentialId = isLeftLiteral && (
-            (left.value == "Edm.String" && /(?<=[^\\]|^):/.test(left.raw)) ||
-            (typeof left.value == "string" && (left.value as string).startsWith("Edm.Int")) ||
-            (typeof left.value == "string" && ["Edm.SByte", "Edm.Byte", "Edm.Decimal", "Edm.Double", "Edm.Single"].includes(left.value as string)) ||
-            typeof left.value == "number"
-        );
-
-        if (isLeftPotentialId || isRightPotentialId) {
-            const where = this.where;
-            this.where = '';
-            this.Visit(left, context);
-            const leftStr = this.where;
-
-            this.where = '';
-            this.Visit(right, context);
-            const rightStr = this.where;
-
-            this.where = where;
-
-            if (isLeftPotentialId) {
-                if (operator == "=" || operator == "!=") {
-                    if (operator == "=") {
-                        this.where += `((${leftStr} = ${rightStr}) || (string::is_record(${leftStr})) && (type::record(${leftStr}) = ${rightStr})))`;
-                    }
-                    else {
-                        this.where += `! ((${leftStr} = ${rightStr}) || (string::is_record(${leftStr})) && (type::record(${leftStr}) = ${rightStr})))`;
-                    }
-                    return;
-                }
-                else {
-                    // Range comparison for IDs
-                    // Only compare the numeric part if it's a record.
-                    // Otherwise, compare the raw field.
-                    this.where += `((string::is_record(type::string(${leftStr})) && type::number(string::split(type::string(${leftStr}), ":")[1]) ${operator} ${rightStr}) || (!string::is_record(type::string(${leftStr})) && ${leftStr} ${operator} ${rightStr}))`;
-                    return;
-                }
-            }
-            else if (isRightPotentialId) {
-                if (operator == "=" || operator == "!=") {
-                    if (operator == "=") {
-                        this.where += `((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::record(${rightStr}) = ${leftStr})))`;
-                    }
-                    else {
-                        this.where += `! ((${rightStr} = ${leftStr}) || (string::is_record(type::string(${rightStr})) && (type::record(${rightStr}) = ${leftStr})))`;
-                    }
-                    return;
-                }
-                else {
-                    // Range comparison for IDs
-                    // Only compare the numeric part if it's a record.
-                    // Otherwise, compare the raw field.
-                    this.where += `((string::is_record(type::string(${rightStr})) && type::number(string::split(type::string(${rightStr}), ":")[1]) ${operator} ${leftStr}) || (!string::is_record(type::string(${rightStr})) && ${rightStr} ${operator} ${leftStr}))`;
-                    return;
-                }
-            }
-        }
-
+        // Standard comparison - RecordIds are now explicitly handled with r"..." prefix
+        // and converted using type::record() in VisitLiteral
         this.Visit(node.value.left, context);
         this.where += ` ${operator} `;
         this.Visit(node.value.right, context);
@@ -361,12 +297,13 @@ export class SurrealDbVisitor extends Visitor {
             let value = Literal.convert(node.value, node.raw);
 
             if (node.value === 'Edm.RecordId') {
-                // Convert the record ID string to a RecordId object
-                // value is already extracted as "table:id" from the literal converter
-                const [table, id] = value.split(':');
-                if (table && id) {
-                    value = new RecordId(table, id);
-                }
+                // value is a record ID string from the literal converter (e.g., "table:id")
+                // Use type::record() cast to convert string to RecordId in SurrealDB
+                // This keeps the parameter as a string for clean JSON serialization
+                context.literal = value;
+                this.parameters.set(name, value);
+                this[target] += `type::record(${name})`;
+                return;
             }
             else if (node.value === 'Edm.PrefixedDate') {
                 // value is a date string from the literal converter
@@ -441,6 +378,23 @@ export class SurrealDbVisitor extends Visitor {
         this[target] += "$this";
     }
 
+    /**
+     * Helper method to convert literal values with proper type handling for SurrealDB
+     * Handles RecordId, PrefixedDate, and PrefixedNumber conversions
+     * All are kept as strings for clean JSON serialization and wrapped with type casts in queries
+     */
+    private convertLiteralValue(literalNode: Lexer.Token): any {
+        let value = Literal.convert(literalNode.value, literalNode.raw);
+
+        // RecordId, PrefixedDate, and PrefixedNumber are all kept as strings
+        // They will be wrapped with type casts when added to the query:
+        // - RecordId: type::record($param)
+        // - PrefixedDate: <datetime>$param
+        // - PrefixedNumber: <number>$param
+
+        return value;
+    }
+
     protected VisitMethodCallExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         const method = node.value.method;
@@ -453,7 +407,7 @@ export class SurrealDbVisitor extends Visitor {
                 // Use SurrealDB's native CONTAINS operator
                 this.Visit(params[0], context);
                 this[target] += ' CONTAINS ';
-                let value = Literal.convert(params[1].value, params[1].raw);
+                let value = this.convertLiteralValue(params[1]);
                 this.parameters.set(name, value);
                 this[target] += name;
                 break;
@@ -461,7 +415,7 @@ export class SurrealDbVisitor extends Visitor {
                 this[target] += 'string::ends_with(';
                 this.Visit(params[0], context);
 
-                let value2 = Literal.convert(params[1].value, params[1].raw);
+                let value2 = this.convertLiteralValue(params[1]);
                 this.parameters.set(name, value2);
                 this[target] += `, type::string(${name}))`;
                 break;
@@ -469,7 +423,7 @@ export class SurrealDbVisitor extends Visitor {
                 this[target] += 'string::starts_with(';
                 this.Visit(params[0], context);
 
-                let value3 = Literal.convert(params[1].value, params[1].raw);
+                let value3 = this.convertLiteralValue(params[1]);
                 this.parameters.set(name, value3);
                 this[target] += `, type::string(${name}))`;
                 break;
