@@ -1,3 +1,4 @@
+import { RecordId } from 'surrealdb';
 import Lexer from '../lexer';
 import { Literal } from "../literal";
 import { SQLLang, type SqlOptions } from "./types";
@@ -359,7 +360,15 @@ export class SurrealDbVisitor extends Visitor {
             let name = `$literal${this.parameterSeed++}`;
             let value = Literal.convert(node.value, node.raw);
 
-            if (node.value === 'Edm.GeographyPoint') {
+            if (node.value === 'Edm.RecordId') {
+                // Convert the record ID string to a RecordId object
+                // value is already extracted as "table:id" from the literal converter
+                const [table, id] = value.split(':');
+                if (table && id) {
+                    value = new RecordId(table, id);
+                }
+            }
+            else if (node.value === 'Edm.GeographyPoint') {
                 const match = node.raw.match(/'Point\(([^)]+)\)'/);
                 if (match) {
                     const [x, y] = match[1].split(' ').map(Number);
@@ -367,7 +376,7 @@ export class SurrealDbVisitor extends Visitor {
                     return;
                 }
             }
-            if (node.value === 'Edm.GeographyPolygon') {
+            else if (node.value === 'Edm.GeographyPolygon') {
                 const match = node.raw.match(/'Polygon\(\(([^)]+)\)\)'/);
                 if (match) {
                     // TODO: Verify this structure. Original code used arrays for Polygon?

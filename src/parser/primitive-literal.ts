@@ -159,6 +159,51 @@ export namespace PrimitiveLiteral {
         }
         return token;
     }
+    export function recordIdValue(value: Utils.SourceArray, index: number): Lexer.Token {
+        let start = index;
+
+        // Check if starts with 'r' prefix
+        if (value[index] !== 0x72) return; // 'r'
+        index++;
+
+        // Check for quote type after 'r'
+        let quoteType: 'single' | 'double' | 'backtick' | null = null;
+        let quoteChar: number;
+
+        if (value[index] === 0x27) { // single quote '
+            quoteType = 'single';
+            quoteChar = 0x27;
+            index++;
+        }
+        else if (value[index] === 0x22) { // double quote "
+            quoteType = 'double';
+            quoteChar = 0x22;
+            index++;
+        }
+        else if (value[index] === 0x60) { // backtick `
+            quoteType = 'backtick';
+            quoteChar = 0x60;
+            index++;
+        }
+        else {
+            return;
+        }
+
+        // Read characters until we find the closing quote
+        while (index < value.length) {
+            if (value[index] === quoteChar) {
+                // Found closing quote
+                index++;
+                return Lexer.tokenize(value, start, index, "Edm.RecordId", Lexer.TokenType.Literal);
+            }
+            // Advance by one character
+            index++;
+        }
+
+        // Reached end of input without finding closing quote
+        return;
+    }
+
     export function stringValue(value: Utils.SourceArray, index: number): Lexer.Token {
         let start = index;
         let squote = Lexer.SQUOTE(value, start);
@@ -757,6 +802,7 @@ export namespace PrimitiveLiteral {
             PrimitiveLiteral.int16Value(value, index) ||
             PrimitiveLiteral.int32Value(value, index) ||
             PrimitiveLiteral.int64Value(value, index) ||
+            PrimitiveLiteral.recordIdValue(value, index) ||
             PrimitiveLiteral.stringValue(value, index) ||
             PrimitiveLiteral.durationValue(value, index) ||
             PrimitiveLiteral.binaryValue(value, index) ||

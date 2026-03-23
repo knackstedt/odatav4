@@ -91,4 +91,12 @@ export class Literal {
         }
         throw new ODataV4ParseError({ msg: `Duration ${value} is invalid` });
     }
+    'Edm.RecordId'(value: string) {
+        // Extract the record ID from r"table:id", r'table:id', or r`table:id`
+        // The value includes the r prefix and quotes
+        const decoded = decodeURIComponent(value);
+        // Remove r prefix and surrounding quotes (can be ", ', or `)
+        const recordId = decoded.slice(2, -1);
+        return recordId;
+    }
 }
