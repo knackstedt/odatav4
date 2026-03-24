@@ -214,6 +214,14 @@ class ODataExpressTableConfig<T = unknown> {
     fieldTypes?: Record<string, 'datetime' | 'date' | 'duration' | 'decimal' | 'uuid' | 'record' | 'table'>;
 
     /**
+     * Custom SELECT expressions to add to queries. Maps SurrealDB expressions to field aliases.
+     * These expressions are added to the SELECT clause and are NOT parameterized.
+     * Example: { "(->has_canonical_finding->canonical_finding.*)[0]": "canonical_finding" }
+     * Results in: SELECT *, (->has_canonical_finding->canonical_finding.*)[0] as canonical_finding FROM table
+     */
+    customSelect?: Record<string, string>;
+
+    /**
      * Hook that is called before record(s) are fetched (GET).
      * May be used to perform additional validation, logging, etc.
      */

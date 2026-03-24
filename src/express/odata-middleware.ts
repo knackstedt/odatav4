@@ -343,7 +343,8 @@ export const ODataV4ToSurrealQL = (
     table: string,
     urlPath: string | ParsedQuery,
     fetch = [] as string | string[],
-    options?: SqlOptions
+    options?: SqlOptions,
+    customSelect?: Record<string, string>
 ) => {
     const parsed = typeof urlPath === 'string'
         ? parseODataRequest(urlPath, options)
@@ -351,7 +352,7 @@ export const ODataV4ToSurrealQL = (
 
     return {
         ...parsed,
-        ...renderQuery(parsed, table, fetch)
+        ...renderQuery(parsed, table, fetch, false, customSelect)
     };
 };
 
@@ -368,7 +369,7 @@ export const RunODataV4SelectFilter = async (
     urlPath: string,
     fetch = [] as string | string[],
     parsed?: ParsedQuery,
-    options?: { maxPageSize?: number; timeout?: string | number; } & SqlOptions
+    options?: { maxPageSize?: number; timeout?: string | number; customSelect?: Record<string, string>; } & SqlOptions
 ) => {
 
     // Ensure we have a parsed query object
@@ -387,7 +388,8 @@ export const RunODataV4SelectFilter = async (
         table,
         parsed,
         fetch,
-        options
+        options,
+        options?.customSelect
     );
 
     let {
@@ -857,7 +859,8 @@ export const SurrealODataV4Middleware = (
             parsedQuery,
             {
                 ...config,
-                fieldAliases: tableConfig.fieldAliases
+                fieldAliases: tableConfig.fieldAliases,
+                customSelect: tableConfig.customSelect
             }
         );
 

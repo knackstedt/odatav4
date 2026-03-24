@@ -72,7 +72,7 @@ function createInspectableString(sql: string, parameters: Record<string, any>) {
     });
 }
 
-export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as string | string[], disableParameters = false) => {
+export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as string | string[], disableParameters = false, customSelect?: Record<string, string>) => {
     let {
         where,
         select,
@@ -141,6 +141,13 @@ export const renderQuery = (query: ParsedQuery, table: string, fetch = [] as str
                 .replace(/ AS `[^`]+`/g, '');
 
             doExpand(include, path + '.');
+        }
+    }
+
+    // Add custom select expressions if provided
+    if (customSelect && Object.keys(customSelect).length > 0) {
+        for (const [expression, alias] of Object.entries(customSelect)) {
+            select += `, ${expression} AS ${alias}`;
         }
     }
 
