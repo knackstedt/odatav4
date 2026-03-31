@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'playground/**'
+      - 'src/**'
       - '.github/workflows/playground.yml'
 
 concurrency:
@@ -31,11 +32,11 @@ jobs:
 
       - name: Install dependencies 1
         working-directory:
-        run: bun install
+        run: bun ci
 
       - name: Install dependencies 2
         working-directory: ./playground
-        run: bun install
+        run: bun ci
 
       - name: Build documentation
         working-directory: ./playground
