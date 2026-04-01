@@ -155,8 +155,8 @@ function simplifyQueryString(query: string): string {
         return content;
     });
 
-    // Strip type::record(...) => ... ONLY when it contains a string literal
-    simplified = simplified.replace(/type::record\(((['"`])[^'"`]*\2)\)/g, '$1');
+    // Convert type::record('id') => r'id' for SurrealDB record literal syntax
+    simplified = simplified.replace(/type::record\(((['"`])[^'"`]*\2)\)/g, 'r$1');
 
     // Remove redundant AS `fieldname` when field is already fieldname
     // e.g., name AS `name` => name
