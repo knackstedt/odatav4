@@ -56,6 +56,12 @@ export type ODataGlobalHooks<T = any> = {
      * Hook that is called after record(s) are mutated (POST, PUT, PATCH, DELETE).
      */
     afterRecordMutate?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Hook to format/transform the response record before it is sent.
+     * Return undefined to exclude the record from the response.
+     */
+    responseFormatter?: (req: express.Request, record: T) => Promise<T | undefined> | T | undefined;
 };
 
 export type ODataExpressHooks<T = Record<any, any>> = {
@@ -246,6 +252,12 @@ class ODataExpressTableConfig<T = unknown> {
      * Hook that is called before any mutation (POST, PUT, PATCH, DELETE).
      */
     beforeRecordMutate?: (req: express.Request, record: T) => Promise<T> | T;
+
+    /**
+     * Hook to format/transform the response record before it is sent.
+     * Return undefined to exclude the record from the response.
+     */
+    responseFormatter?: (req: express.Request, record: T) => Promise<T | undefined> | T | undefined;
 }
 
 

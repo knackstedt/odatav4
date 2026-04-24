@@ -643,7 +643,19 @@ export const ODataCRUDMethods = async (
                 }
             });
         }
-        results = results.filter(r => !!r);
+
+        // Apply responseFormatter if configured (table level takes precedence)
+        results = await Promise.all(results.map(async r => {
+            if (r?.accessResult?.tableConfig?.responseFormatter) {
+                r.result = await r.accessResult.tableConfig.responseFormatter(req, r.result);
+            }
+            if (r?.result !== undefined && config.hooks?.responseFormatter) {
+                r.result = await config.hooks.responseFormatter(req, r.result);
+            }
+            return r;
+        }));
+
+        results = results.filter(r => !!r && r.result !== undefined);
         return results;
     }
     else {
@@ -653,6 +665,15 @@ export const ODataCRUDMethods = async (
         if (results[0]?.accessResult?.tableConfig?.allowedFieldPaths && results[0].accessResult.tableConfig.allowedFieldPaths.length > 0) {
             results[0].result = keepAllowedFields(results[0].result, results[0].accessResult.tableConfig.allowedFieldPaths);
         }
+
+        // Apply responseFormatter if configured (table level takes precedence)
+        if (results[0]?.accessResult?.tableConfig?.responseFormatter) {
+            results[0].result = await results[0].accessResult.tableConfig.responseFormatter(req, results[0].result);
+        }
+        if (results[0]?.result !== undefined && config.hooks?.responseFormatter) {
+            results[0].result = await config.hooks.responseFormatter(req, results[0].result);
+        }
+
         return results[0];
     }
 };
@@ -780,6 +801,19 @@ export const SurrealODataV4Middleware = (
             // Apply allowed field paths if configured
             if (tableConfig.allowedFieldPaths && tableConfig.allowedFieldPaths.length > 0) {
                 result = keepAllowedFields(result, tableConfig.allowedFieldPaths);
+            }
+
+            // Apply responseFormatter if configured (table level takes precedence)
+            if (typeof tableConfig.responseFormatter === 'function') {
+                result = await tableConfig.responseFormatter(req, result);
+            }
+            if (result !== undefined && typeof config.hooks?.responseFormatter === 'function') {
+                result = await config.hooks.responseFormatter(req, result);
+            }
+
+            if (result === undefined) {
+                res.status(404).send({ error: { message: "Not Found" } });
+                return;
             }
 
             res.contentType("application/json");
@@ -917,6 +951,32 @@ export const SurrealODataV4Middleware = (
         // Apply allowed field paths if configured
         if (tableConfig.allowedFieldPaths && tableConfig.allowedFieldPaths.length > 0) {
             result.value = result.value.map(record => keepAllowedFields(record, tableConfig.allowedFieldPaths!));
+        }
+
+        // Apply responseFormatter if configured (table level takes precedence)
+        if (typeof tableConfig.responseFormatter === 'function') {
+            const batchSize = 10;
+            const processedValues = [];
+            for (let i = 0; i < result.value.length; i += batchSize) {
+                const batch = result.value.slice(i, i + batchSize);
+                const processedBatch = await Promise.all(
+                    batch.map(v => tableConfig.responseFormatter!(req, v))
+                );
+                processedValues.push(...processedBatch.filter(v => v !== undefined));
+            }
+            result.value = processedValues;
+        }
+        if (typeof config.hooks?.responseFormatter === 'function') {
+            const batchSize = 10;
+            const processedValues = [];
+            for (let i = 0; i < result.value.length; i += batchSize) {
+                const batch = result.value.slice(i, i + batchSize);
+                const processedBatch = await Promise.all(
+                    batch.map(v => config.hooks!.responseFormatter!(req, v))
+                );
+                processedValues.push(...processedBatch.filter(v => v !== undefined));
+            }
+            result.value = processedValues;
         }
 
         res.setHeader('Content-Type', 'application/json');
