@@ -236,4 +236,148 @@ describe('Field Aliases', () => {
             expect(result.where).toContain('->on->finding');
         });
     });
+
+    describe('Backtick dot notation support', () => {
+        it('should parse backtick-wrapped dot notation paths', async () => {
+            const query = createQuery('$filter=`field`.`subfield` eq 123', {
+                type: SQLLang.SurrealDB
+            });
+
+            // Should produce nested field access using dot notation
+            expect(query.where).toContain('type::field($field1).type::field($field2)');
+            const paramValues = Array.from(query.parameters.values());
+            expect(paramValues).toContain('field');
+            expect(paramValues).toContain('subfield');
+        });
+
+        it('should handle deep nesting with backticks', async () => {
+            const query = createQuery('$filter=`a`.`b`.`c` eq 123', {
+                type: SQLLang.SurrealDB
+            });
+
+            // Should produce three levels of field access
+            expect(query.where).toContain('type::field($field1).type::field($field2).type::field($field3)');
+            const paramValues = Array.from(query.parameters.values());
+            expect(paramValues).toContain('a');
+            expect(paramValues).toContain('b');
+            expect(paramValues).toContain('c');
+        });
+
+        it('should handle mixed backtick and plain identifiers in dot paths', async () => {
+            const query = createQuery('$filter=`field`.subfield eq 123', {
+                type: SQLLang.SurrealDB
+            });
+
+            // Should parse correctly even with mixed notation
+            expect(query.where).toContain('type::field($field1)');
+            expect(query.where).toContain('$literal1');
+        });
+
+        it('should support field aliases with backtick dot notation', async () => {
+            const query = createQuery('$filter=`scan`.`status` eq \'active\'', {
+                type: SQLLang.SurrealDB,
+                fieldAliases: { 'scan.status': '->on->finding->status' }
+            });
+
+            // When the full path matches an alias, it should be replaced
+            expect(query.where).toContain('->on->finding->status');
+        });
+
+        it('should parse backtick dot notation in $select', async () => {
+            const query = createQuery('$select=`abc`.`def`', {
+                type: SQLLang.SurrealDB
+            });
+
+            // Should produce single type::field() with backtick-wrapped path
+            expect(query.select).toBe('type::field($field1) AS `abc`.`def`');
+            expect(query.parameters.get('$field1')).toBe('`abc`.`def`');
+        });
+
+        it('should handle field aliases with backtick dot notation in $select', async () => {
+            const query = createQuery('$select=`scan`.`status`', {
+                type: SQLLang.SurrealDB,
+                fieldAliases: { 'scan.status': '->on->finding->status' }
+            });
+
+            // When the full path matches an alias in SELECT, it should be replaced
+            expect(query.select).toContain('->on->finding->status');
+        });
+
+        describe('AS clause escaping for nested objects', () => {
+            it('should escape AS clause for simple dot notation to create nested object', async () => {
+                const query = createQuery('$select=`foo`.`bar`', {
+                    type: SQLLang.SurrealDB
+                });
+
+                // The AS clause should use backtick-wrapped dot notation for nested structure
+                // Uses single type::field() with backtick-wrapped path parameter
+                expect(query.select).toBe('type::field($field1) AS `foo`.`bar`');
+                expect(query.parameters.get('$field1')).toBe('`foo`.`bar`');
+            });
+
+            it('should escape AS clause for deep nesting', async () => {
+                const query = createQuery('$select=`a`.`b`.`c`', {
+                    type: SQLLang.SurrealDB
+                });
+
+                // Should produce AS `a`.`b`.`c` for nested object structure
+                expect(query.select).toBe('type::field($field1) AS `a`.`b`.`c`');
+                expect(query.parameters.get('$field1')).toBe('`a`.`b`.`c`');
+            });
+
+            it('should handle multiple dot notation fields in select', async () => {
+                const query = createQuery('$select=`foo`.`bar`,`baz`.`qux`', {
+                    type: SQLLang.SurrealDB
+                });
+
+                // Both fields should use single type::field() calls
+                expect(query.select).toBe('type::field($field1) AS `foo`.`bar`, type::field($field2) AS `baz`.`qux`');
+                expect(query.parameters.get('$field1')).toBe('`foo`.`bar`');
+                expect(query.parameters.get('$field2')).toBe('`baz`.`qux`');
+            });
+
+            it('should escape AS clause with special characters in field names', async () => {
+                const query = createQuery('$select=`field-name`.`sub_field`', {
+                    type: SQLLang.SurrealDB
+                });
+
+                // Should preserve special characters in AS clause
+                expect(query.select).toBe('type::field($field1) AS `field-name`.`sub_field`');
+                expect(query.parameters.get('$field1')).toBe('`field-name`.`sub_field`');
+            });
+
+            it('should handle mixed regular and dot notation fields', async () => {
+                const query = createQuery('$select=id,`foo`.`bar`,name', {
+                    type: SQLLang.SurrealDB
+                });
+
+                // Regular fields and dot notation fields should both work
+                expect(query.select).toContain('type::field($select0) AS `id`');
+                expect(query.select).toContain('type::field($field1) AS `foo`.`bar`');
+                expect(query.select).toContain('type::field($select1) AS `name`');
+            });
+
+            // Note: The parser doesn't currently support escaped backticks within field names
+            // This test is commented out until parser support is added
+            // it('should properly escape backticks within field names in AS clause', async () => {
+            //     const query = createQuery('$select=`field\\`with\\`ticks`.`sub`', {
+            //         type: SQLLang.SurrealDB
+            //     });
+            //
+            //     // Backticks in field names should be escaped in AS clause
+            //     expect(query.select).toContain(' AS `field\\`with\\`ticks.sub`');
+            // });
+
+            it('should use aliased field but still produce nested AS clause', async () => {
+                const query = createQuery('$select=`scan`.`status`', {
+                    type: SQLLang.SurrealDB,
+                    fieldAliases: { 'scan.status': '->on->finding->status' }
+                });
+
+                // Should use the alias but keep the original AS clause for nested structure
+                expect(query.select).toContain('->on->finding->status');
+                expect(query.select).toContain(' AS `scan`.`status`');
+            });
+        });
+    });
 });

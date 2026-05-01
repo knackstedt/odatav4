@@ -67,9 +67,43 @@ export class SurrealDbVisitor extends Visitor {
             return;
         }
 
+        // Check if this select item has a nested path structure (from dot notation)
+        // The structure is: SelectItem.value = SelectPath, and SelectPath.value = { path, next }
+        const pathValue = node.value?.value;
+        if (pathValue?.path && pathValue?.next) {
+            // Build the full path for alias checking
+            let fullPath = this.getFullPath(pathValue.path);
+            const nextPath = this.getFullPath(pathValue.next);
+            if (fullPath && nextPath) {
+                fullPath = `${fullPath}.${nextPath}`;
+            }
+
+            // Get clean dot path for AS clause (e.g., `foo`.`bar` -> foo.bar)
+            const cleanPath = this.getCleanDotPath(pathValue);
+            const asClause = cleanPath ? this.buildBacktickWrappedAsClause(cleanPath) : node.raw.replace(/`/g, '');
+
+            // Check if the full path has a field alias
+            if (fullPath && this.options.fieldAliases?.[fullPath]) {
+                const alias = this.options.fieldAliases[fullPath];
+                this.select += `${alias} AS ${asClause}`;
+                return;
+            }
+
+            // For dot notation, use a single type::field() with the backtick-wrapped path
+            // e.g., type::field('`foo`.`bar`') AS `foo`.`bar`
+            const fieldSeed = `$field${this.fieldSeed++}`;
+            this.parameters.set(fieldSeed, asClause);
+            this.select += `type::field(${fieldSeed}) AS ${asClause}`;
+            return;
+        }
+
+        // Extract the field name from the token value (decoded, without backticks)
+        // For simple select items: node.value (SelectPath) -> value (ComplexProperty/PrimitiveProperty) -> value (ODataIdentifier) -> name
+        const fieldName = node.value?.value?.value?.name || node.value?.value?.name || node.value?.name || node.raw;
+
         const fieldSeed = `$select${this.selectSeed++}`;
-        this.parameters.set(fieldSeed, node.raw);
-        this.select += `type::field(${fieldSeed}) AS \`${node.raw.replace(/`/g, '\\`')}\``;
+        this.parameters.set(fieldSeed, fieldName);
+        this.select += `type::field(${fieldSeed}) AS \`${fieldName.replace(/`/g, '\\`')}\``;
     }
 
     protected VisitAndExpression(node: Lexer.Token, context: any) {
@@ -251,17 +285,183 @@ export class SurrealDbVisitor extends Visitor {
         }
     }
 
+    // Helper to extract the full dot-notation path from a property path expression
+    private getFullPath(node: Lexer.Token): string | null {
+        if (!node) return null;
+
+        // Handle ODataIdentifier
+        if (node.type === Lexer.TokenType.ODataIdentifier && node.value?.name) {
+            return node.value.name;
+        }
+
+        // Handle SinglePathExpression (dot path) - value is the next token in the path
+        if (node.type === Lexer.TokenType.SinglePathExpression) {
+            // SinglePathExpression.value contains the next part of the path (often an ODataIdentifier)
+            const nextPath = this.getFullPath(node.value);
+            return nextPath;
+        }
+
+        // Handle PropertyPathExpression - recursively build path from current and next
+        if (node.type === Lexer.TokenType.PropertyPathExpression && node.value?.current) {
+            let path = this.getFullPath(node.value.current);
+            if (node.value.next) {
+                const nextPath = this.getFullPath(node.value.next);
+                if (nextPath && path) {
+                    path = `${path}.${nextPath}`;
+                } else if (nextPath) {
+                    path = nextPath;
+                }
+            }
+            return path;
+        }
+
+        // Handle SelectPath - may contain ComplexProperty, ComplexCollectionProperty, etc.
+        if (node.type === Lexer.TokenType.SelectPath && node.value) {
+            // SelectPath.value may be a property token with a name
+            if (node.value.name) {
+                return node.value.name;
+            }
+            // Or it may have nested structure
+            return this.getFullPath(node.value);
+        }
+
+        // Handle ComplexProperty, ComplexCollectionProperty, PrimitiveProperty, etc.
+        if (node.value?.name) {
+            return node.value.name;
+        }
+
+        return null;
+    }
+
+    // Helper to extract clean dot-notation path for AS clause from SelectPath with dot notation
+    // Converts `foo`.`bar` to foo.bar (removes backticks but keeps dots)
+    private getCleanDotPath(pathValue: any): string | null {
+        if (!pathValue) return null;
+
+        const parts: string[] = [];
+
+        // Extract the first part
+        const firstPart = this.getFullPath(pathValue.path);
+        if (firstPart) parts.push(firstPart);
+
+        // Extract the rest of the path recursively
+        const extractNext = (node: any): void => {
+            if (!node) return;
+
+            // If it's a token (like SinglePathExpression), check its value property
+            if (node.type === Lexer.TokenType.SinglePathExpression) {
+                // SinglePathExpression has either:
+                // 1. value.current and value.next (for nested paths)
+                // 2. value = direct identifier (for last element)
+                if (node.value?.current && node.value?.next) {
+                    const currentPart = this.getFullPath(node.value.current);
+                    if (currentPart) parts.push(currentPart);
+                    extractNext(node.value.next);
+                } else if (node.value) {
+                    const part = this.getFullPath(node.value);
+                    if (part) parts.push(part);
+                }
+            }
+            // If it's a raw value object with current/next structure
+            else if (node.current && node.next) {
+                const currentPart = this.getFullPath(node.current);
+                if (currentPart) parts.push(currentPart);
+                extractNext(node.next);
+            }
+            // If it's a direct value (ODataIdentifier or similar)
+            else {
+                const part = this.getFullPath(node);
+                if (part) parts.push(part);
+            }
+        };
+
+        extractNext(pathValue.next);
+
+        return parts.length > 0 ? parts.join('.') : null;
+    }
+
+    // Helper to build backtick-wrapped AS clause for nested objects
+    // Converts foo.bar to `foo`.`bar` for SurrealDB nested object creation
+    private buildBacktickWrappedAsClause(dotPath: string): string {
+        return dotPath.split('.').map(part => `\`${part.replace(/`/g, '\\`')}\``).join('.');
+    }
+
     protected VisitPropertyPathExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
         if (node.value.current && node.value.next) {
+            // Check if the full path (including dot notation) matches a field alias
+            const fullPath = this.getFullPath(node);
+            if (fullPath && this.options.fieldAliases?.[fullPath]) {
+                this[target] += this.options.fieldAliases[fullPath];
+                return;
+            }
+
             this.Visit(node.value.current, context);
             const isCollectionPath = node.value.next.type === Lexer.TokenType.CollectionPathExpression;
-            if (!isCollectionPath) {
+            const isDotPath = node.value.next.type === Lexer.TokenType.SinglePathExpression;
+            if (!isCollectionPath && !isDotPath) {
                 this[target] += "->";
+            }
+            else if (isDotPath) {
+                this[target] += ".";
             }
             this.Visit(node.value.next, context);
         }
         else this.Visit(node.value, context);
+    }
+
+    protected VisitSinglePathExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+        // Handle dot path expressions (field.subfield or `field`.`subfield`)
+        if (node.value.current && node.value.next) {
+            this.Visit(node.value.current, context);
+            this[target] += ".";
+            this.Visit(node.value.next, context);
+        }
+        else {
+            this.Visit(node.value, context);
+        }
+    }
+
+    protected VisitComplexProperty(node: Lexer.Token, context: any) {
+        // ComplexProperty contains an odataIdentifier - visit it to render the field
+        if (node.value?.name) {
+            // Treat as ODataIdentifier for field rendering
+            const fieldName = node.value.name;
+            const target = context?.target || 'where';
+            const aliasedField = this.options.fieldAliases?.[fieldName];
+
+            if (aliasedField) {
+                this[target] += aliasedField;
+            } else {
+                const fieldSeed = `$field${this.fieldSeed++}`;
+                this.parameters.set(fieldSeed, fieldName);
+                this[target] += `type::field(${fieldSeed})`;
+            }
+        } else {
+            this.Visit(node.value, context);
+        }
+    }
+
+    protected VisitSelectPath(node: Lexer.Token, context: any) {
+        // SelectPath.value may contain a ComplexProperty or nested structure
+        if (node.value?.name) {
+            // Direct property name - treat as field
+            const fieldName = node.value.name;
+            const target = context?.target || 'where';
+            const aliasedField = this.options.fieldAliases?.[fieldName];
+
+            if (aliasedField) {
+                this[target] += aliasedField;
+            } else {
+                const fieldSeed = `$field${this.fieldSeed++}`;
+                this.parameters.set(fieldSeed, fieldName);
+                this[target] += `type::field(${fieldSeed})`;
+            }
+        } else if (node.value) {
+            // Nested structure - visit recursively
+            this.Visit(node.value, context);
+        }
     }
 
     protected VisitODataIdentifier(node: Lexer.Token, context: any) {

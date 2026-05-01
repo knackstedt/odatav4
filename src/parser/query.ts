@@ -900,6 +900,15 @@ export namespace Query {
             }
         }
 
+        // Handle dot notation for property paths (e.g., `abc`.`def` or field.subfield)
+        let dotPath = Expressions.dotPathExpr(value, index);
+        if (dotPath) {
+            let path = Lexer.clone(token);
+            token.next = dotPath.next;
+            token.raw = Utils.stringify(value, start, token.next);
+            token.value = { path, next: dotPath };
+        }
+
         return token;
     }
 

@@ -491,7 +491,8 @@ export namespace Expressions {
                 collectionNavigationExpr(value, token.next) ||
                 singleNavigationExpr(value, token.next) ||
                 complexPathExpr(value, token.next) ||
-                singlePathExpr(value, token.next);
+                singlePathExpr(value, token.next) ||
+                dotPathExpr(value, token.next);
 
             if (nav) {
                 index = nav.next;
@@ -789,6 +790,33 @@ export namespace Expressions {
         if (value[index] !== 0x2f) return;
         let boundFunction = boundFunctionExpr(value, index + 1);
         if (boundFunction) return Lexer.tokenize(value, index, boundFunction.next, boundFunction, Lexer.TokenType.SinglePathExpression);
+    }
+
+    export function dotPathExpr(value: Utils.SourceArray, index: number): Lexer.Token {
+        // Handle dot notation for property paths (e.g., field.subfield or `field`.`subfield`)
+        if (value[index] !== 0x2e) return; // 0x2e is '.'
+        let start = index;
+        index++;
+
+        // Parse the next identifier (supports backtick-wrapped identifiers via odataIdentifier)
+        let nextId = NameOrIdentifier.odataIdentifier(value, index);
+        if (!nextId) return;
+
+        index = nextId.next;
+
+        // Check for more dot-separated path components
+        let morePath = dotPathExpr(value, index);
+        if (morePath) {
+            index = morePath.next;
+            // Create a structure with current/next for nested paths
+            const pathValue = {
+                current: nextId,
+                next: morePath
+            };
+            return Lexer.tokenize(value, start, index, pathValue, Lexer.TokenType.SinglePathExpression);
+        }
+
+        return Lexer.tokenize(value, start, index, nextId, Lexer.TokenType.SinglePathExpression);
     }
     export function functionExpr(value: Utils.SourceArray, index: number): Lexer.Token {
         let namespaceNext = NameOrIdentifier.namespace(value, index);

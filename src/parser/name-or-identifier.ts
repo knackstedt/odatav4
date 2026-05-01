@@ -1,6 +1,6 @@
-import Utils, { ODataV4ParseError } from "./utils";
 import Lexer from "./lexer";
 import PrimitiveLiteral from "./primitive-literal";
+import Utils, { ODataV4ParseError } from "./utils";
 
 export namespace NameOrIdentifier {
     export function enumeration(value: Utils.SourceArray, index: number): Lexer.Token {
@@ -153,6 +153,8 @@ export namespace NameOrIdentifier {
         // Check for backtick-delimited identifier
         let backtick = Lexer.BACKTICK(value, index);
         if (backtick > index) {
+            // Calculate the length of the opening backtick (1 for ` or 3 for %60)
+            const openingBacktickLength = backtick - index;
             index = backtick;
             let contentStart = index; // Save start of content
 
@@ -169,9 +171,14 @@ export namespace NameOrIdentifier {
             if (!closingBacktick)
                 throw new ODataV4ParseError({ msg: "FormatError: Missing closing backtick" });
 
+            // Calculate the length of the closing backtick
+            const closingBacktickLength = closingBacktick - index;
             index = closingBacktick;
 
-            return Lexer.tokenize(value, start, index, { name: Utils.stringify(value, start+1, index-1) }, tokenType || Lexer.TokenType.ODataIdentifier);
+            // Extract the name, skipping the backtick delimiters
+            return Lexer.tokenize(value, start, index, {
+                name: Utils.stringify(value, start + openingBacktickLength, index - closingBacktickLength)
+            }, tokenType || Lexer.TokenType.ODataIdentifier);
         }
 
         // Original identifier logic
@@ -185,7 +192,16 @@ export namespace NameOrIdentifier {
         if (index > start) return Lexer.tokenize(value, start, index, { name: Utils.stringify(value, start, index) }, tokenType || Lexer.TokenType.ODataIdentifier);
     }
     export function namespacePart(value: Utils.SourceArray, index: number): Lexer.Token {
-        return NameOrIdentifier.odataIdentifier(value, index, Lexer.TokenType.NamespacePart);
+        // Namespace parts should not accept backtick-wrapped identifiers
+        // to avoid incorrectly matching property paths like `field`.`subfield` as namespaces
+        const start = index;
+        if (Lexer.identifierLeadingCharacter(value[index]) && value[index] !== 0x60) {
+            index++;
+            while (index < value.length && (index - start < 128) && Lexer.identifierCharacter(value[index])) {
+                index++;
+            }
+        }
+        if (index > start) return Lexer.tokenize(value, start, index, { name: Utils.stringify(value, start, index) }, Lexer.TokenType.NamespacePart);
     }
     export function entitySetName(value: Utils.SourceArray, index: number, metadataContext?: any): Lexer.Token {
         let token = NameOrIdentifier.odataIdentifier(value, index, Lexer.TokenType.EntitySetName);
