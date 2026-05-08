@@ -547,13 +547,17 @@ export const ODataCRUDMethods = async (
                 transformFieldTypes(item, tableConfig.fieldTypes);
             }
 
-            const results = await db.query(withTimeout(`CREATE type::record($id) CONTENT $content`, timeout), {
-                id: newId,
-                content: item,
-                ...variables
-            }).collect();
-            const popped = results.pop();
-            result = Array.isArray(popped) && popped.length > 0 ? popped[0] : null;
+            if (typeof tableConfig.postHandler === 'function') {
+                result = await tableConfig.postHandler(req, db, { ...item, id: newId });
+            } else {
+                const results = await db.query(withTimeout(`CREATE type::record($id) CONTENT $content`, timeout), {
+                    id: newId,
+                    content: item,
+                    ...variables
+                }).collect();
+                const popped = results.pop();
+                result = Array.isArray(popped) && popped.length > 0 ? popped[0] : null;
+            }
         }
         else if (req.method === "PATCH") {
             // if (!item.id) {
@@ -567,12 +571,16 @@ export const ODataCRUDMethods = async (
                 transformFieldTypes(item, tableConfig.fieldTypes);
             }
 
-            const results = await db.query(withTimeout(`UPDATE type::record($id) MERGE $content`, timeout), {
-                id: rid,
-                content: item,
-                ...variables
-            }).collect();
-            result = results.pop()[0];
+            if (typeof tableConfig.patchHandler === 'function') {
+                result = await tableConfig.patchHandler(req, db, { ...item, id: rid });
+            } else {
+                const results = await db.query(withTimeout(`UPDATE type::record($id) MERGE $content`, timeout), {
+                    id: rid,
+                    content: item,
+                    ...variables
+                }).collect();
+                result = results.pop()[0];
+            }
         }
         else if (req.method === "PUT") {
             delete item.id;
@@ -590,11 +598,15 @@ export const ODataCRUDMethods = async (
             result = results.pop()[0];
         }
         else if (req.method === "DELETE") {
-            const results = await db.query(withTimeout(`DELETE type::record($id)`, timeout), {
-                id: rid,
-                ...variables
-            }).collect();
-            result = results.pop()[0];
+            if (typeof tableConfig.deleteHandler === 'function') {
+                result = await tableConfig.deleteHandler(req, db, { id: rid } as any);
+            } else {
+                const results = await db.query(withTimeout(`DELETE type::record($id)`, timeout), {
+                    id: rid,
+                    ...variables
+                }).collect();
+                result = results.pop()[0];
+            }
         }
         else {
             throw { status: 400, message: "Invalid method" };
@@ -763,11 +775,16 @@ export const SurrealODataV4Middleware = (
                 }
             }
             const tmo = tableConfig.timeout ?? router.config.timeout;
-            let _r = await db.query(withTimeout(query, tmo), {
-                ...params,
-                id: new RecordId(table, id)
-            }).collect<any[][]>();
-            let result = _r?.[0]?.[0];
+            let result;
+            if (typeof tableConfig.getHandler === 'function') {
+                result = await tableConfig.getHandler(req, db, { id: new RecordId(table, id) } as any);
+            } else {
+                let _r = await db.query(withTimeout(query, tmo), {
+                    ...params,
+                    id: new RecordId(table, id)
+                }).collect<any[][]>();
+                result = _r?.[0]?.[0];
+            }
 
             if (!result) {
                 res.status(404).send({ error: { message: "Not Found" } });

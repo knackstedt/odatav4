@@ -254,6 +254,37 @@ class ODataExpressTableConfig<T = unknown> {
     beforeRecordMutate?: (req: express.Request, record: T) => Promise<T> | T;
 
     /**
+     * Custom handler that replaces the default GET database query for a single record.
+     * When set, this function is called instead of querying the database.
+     * Receives req, db, and a partial record containing the target id as a RecordId.
+     * Return null to send a 404 response.
+     */
+    getHandler?: (req: express.Request, db: Surreal, record: T) => Promise<T | null> | T | null;
+
+    /**
+     * Custom handler that replaces the default POST (create) database query.
+     * When set, this function is called instead of the default CREATE query.
+     * Receives req, db, and the record content with the generated id as a RecordId.
+     * Must return the created record.
+     */
+    postHandler?: (req: express.Request, db: Surreal, record: T) => Promise<T | null> | T | null;
+
+    /**
+     * Custom handler that replaces the default PATCH (update) database query.
+     * When set, this function is called instead of the default UPDATE...MERGE query.
+     * Receives req, db, and the record content with the target id as a RecordId.
+     * Must return the updated record.
+     */
+    patchHandler?: (req: express.Request, db: Surreal, record: T) => Promise<T | null> | T | null;
+
+    /**
+     * Custom handler that replaces the default DELETE database query.
+     * When set, this function is called instead of the default DELETE query.
+     * Receives req, db, and a partial record containing the target id as a RecordId.
+     */
+    deleteHandler?: (req: express.Request, db: Surreal, record: T) => Promise<any> | any;
+
+    /**
      * Hook to format/transform the response record before it is sent.
      * Return undefined to exclude the record from the response.
      */
