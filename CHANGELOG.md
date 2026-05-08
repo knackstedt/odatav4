@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [4.7.1](https://github.com/knackstedt/odatav4/compare/v4.7.0...v4.7.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* url predicate handling ([5eb376b](https://github.com/knackstedt/odatav4/commit/5eb376b9e3cf4b7d9c53a2ea45789e46fa47a729))
+
 ## [4.7.0](https://github.com/knackstedt/odatav4/compare/v4.6.0...v4.7.0) (2026-05-08)
 
 
