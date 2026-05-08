@@ -58,12 +58,23 @@ export class SurrealDbVisitor extends Visitor {
     }
 
     protected VisitGroupByItem(node: Lexer.Token, context: any) {
-        this.groupby += '`' + node.value.expr.raw.replace(/`/g, '\\`') + '`';
+        const raw = node.value.expr.raw;
+        if (raw.includes('.')) {
+            this.groupby += raw.split('.').map((p: string) => '`' + p.replace(/`/g, '\\`') + '`').join('.');
+        } else {
+            this.groupby += '`' + raw.replace(/`/g, '\\`') + '`';
+        }
     }
 
     protected VisitSelectItem(node: Lexer.Token, context: any) {
         if (node.raw === '*') {
             this.select += '*';
+            return;
+        }
+
+        // Handle namespace.* pattern (e.g., lime.* in plain dot notation)
+        if (node.value?.namespace && node.value?.value === '*') {
+            this.select += `${node.value.namespace}.*`;
             return;
         }
 
@@ -101,9 +112,17 @@ export class SurrealDbVisitor extends Visitor {
         // For simple select items: node.value (SelectPath) -> value (ComplexProperty/PrimitiveProperty) -> value (ODataIdentifier) -> name
         const fieldName = node.value?.value?.value?.name || node.value?.value?.name || node.value?.name || node.raw;
 
-        const fieldSeed = `$select${this.selectSeed++}`;
-        this.parameters.set(fieldSeed, fieldName);
-        this.select += `type::field(${fieldSeed}) AS \`${fieldName.replace(/`/g, '\\`')}\``;
+        if (fieldName.includes('.')) {
+            // Plain dot notation (e.g., toast.foo.bar) - same treatment as backtick dot notation
+            const asClause = this.buildBacktickWrappedAsClause(fieldName);
+            const fieldSeed = `$field${this.fieldSeed++}`;
+            this.parameters.set(fieldSeed, asClause);
+            this.select += `type::field(${fieldSeed}) AS ${asClause}`;
+        } else {
+            const fieldSeed = `$select${this.selectSeed++}`;
+            this.parameters.set(fieldSeed, fieldName);
+            this.select += `type::field(${fieldSeed}) AS \`${fieldName.replace(/`/g, '\\`')}\``;
+        }
     }
 
     protected VisitAndExpression(node: Lexer.Token, context: any) {
@@ -471,6 +490,8 @@ export class SurrealDbVisitor extends Visitor {
         if (context.target == 'orderby') {
             if (aliasedField) {
                 this[context.target] += aliasedField;
+            } else if (fieldName.includes('.')) {
+                this[context.target] += fieldName.split('.').map((p: string) => '`' + p.replace(/`/g, '\\`') + '`').join('.');
             } else {
                 this[context.target] += '`' + fieldName.replace(/`/g, '\\`') + '`';
             }
