@@ -203,7 +203,26 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
     const uriPathWithQuery = path.endsWith("/") ? path.slice(0, -1) : path;
     const uriPath = uriPathWithQuery.split('?')[0];
     const lastUrlChunk = uriPath.split('/').filter(c => !!c).pop();
-    const [urlTargetTable, urlTargetId] = lastUrlChunk == 'odata' ? [] : (lastUrlChunk || '').split(':');
+    // Support OData key predicate format: table(r'table:id'), table(r"table:id"), table('id'), table(id)
+    const kpMatch = lastUrlChunk !== 'odata' ? (lastUrlChunk || '').match(/^([^(:]+)\((.+)\)$/) : null;
+    let urlTargetTable: string;
+    let urlTargetId: string;
+    if (kpMatch) {
+        urlTargetTable = kpMatch[1];
+        let rawKey = kpMatch[2];
+        const rMatch = rawKey.match(/^r(['"`])(.+)\1$/);
+        if (rMatch) rawKey = rMatch[2];
+        else {
+            const qMatch = rawKey.match(/^(['"`])(.+)\1$/);
+            if (qMatch) rawKey = qMatch[2];
+        }
+        const colonIdx = rawKey.indexOf(':');
+        urlTargetId = colonIdx >= 0 ? rawKey.slice(colonIdx + 1) : rawKey;
+    } else {
+        const parts = lastUrlChunk == 'odata' ? ([] as string[]) : (lastUrlChunk || '').split(':');
+        urlTargetTable = parts[0];
+        urlTargetId = parts[1];
+    }
 
     if (object?.['id']) {
         const [objTable, objId] = object['id'].split(':');
@@ -479,7 +498,21 @@ export const ODataCRUDMethods = async (
     }[] = isBulk ? req.body : [req.body];
 
     if (req.method === "DELETE" && !req.body) {
-        items = [{ id: req.path.split('/').pop() }] as any;
+        const pathSeg = req.path.split('/').pop() || '';
+        const kpMatch = pathSeg.match(/^([^(:]+)\((.+)\)$/);
+        if (kpMatch) {
+            let rawKey = kpMatch[2];
+            const rMatch = rawKey.match(/^r(['"`])(.+)\1$/);
+            if (rMatch) rawKey = rMatch[2];
+            else {
+                const qMatch = rawKey.match(/^(['"`])(.+)\1$/);
+                if (qMatch) rawKey = qMatch[2];
+            }
+            const id = rawKey.includes(':') ? rawKey.slice(rawKey.indexOf(':') + 1) : rawKey;
+            items = [{ id: `${kpMatch[1]}:${id}` }] as any;
+        } else {
+            items = [{ id: pathSeg }] as any;
+        }
     }
 
     // Remove any empty items.
