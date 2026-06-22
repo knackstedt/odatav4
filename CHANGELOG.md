@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.0.0](https://github.com/knackstedt/odatav4/compare/v4.7.1...v5.0.0) (2026-06-22)
+
+
+### Features
+
+* make express middleware optional with separate export path ([05d0693](https://github.com/knackstedt/odatav4/commit/05d0693276eb411bb8f3e11b3ea7c5213454f9cd))
+
 ### [4.7.1](https://github.com/knackstedt/odatav4/compare/v4.7.0...v4.7.1) (2026-05-08)
 
 
