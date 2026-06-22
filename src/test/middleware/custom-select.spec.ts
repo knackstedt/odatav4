@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { Surreal } from "surrealdb";
 import { RunODataV4SelectFilter, SurrealODataV4Middleware } from "../../express/odata-middleware";
-import { ODataExpressConfig, ODataExpressTable } from "../../types";
+import { ODataExpressConfig, ODataExpressTable } from "../../express/types";
 
 describe("Custom Select Middleware Integration", () => {
     describe("RunODataV4SelectFilter with customSelect", () => {

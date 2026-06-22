@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { Surreal } from "surrealdb";
 import { ODataCRUDMethods, ODataV4ToSurrealQL, parseODataRequest, RunODataV4SelectFilter, SurrealODataV4Middleware } from "../../express/odata-middleware";
-import { ODataExpressConfig, ODataExpressTable } from "../../types";
+import { ODataExpressConfig, ODataExpressTable } from "../../express/types";
 
 describe("OData Middleware", () => {
     describe("parseODataRequest", () => {

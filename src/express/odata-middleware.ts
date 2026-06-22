@@ -5,7 +5,8 @@ import { Decimal, Duration, RecordId, Surreal, Table, Uuid } from 'surrealdb';
 import { createQuery, SQLLang, type SqlOptions } from '../parser/main';
 import { renderQuery } from '../parser/query-renderer';
 import { ODataV4ParseError } from '../parser/utils';
-import type { ODataExpressConfig, ODataExpressTable, ParsedQuery } from '../types';
+import type { ParsedQuery } from '../types';
+import type { ODataExpressConfig, ODataExpressTable } from './types';
 import { getJSONSchema, getODataMetadata } from '../util/metadata';
 
 

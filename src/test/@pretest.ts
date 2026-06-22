@@ -6,7 +6,7 @@ import { readFileSync } from 'fs';
 import getPort from 'get-port';
 import { GeometryLine, GeometryPoint, RecordId, Surreal } from 'surrealdb';
 import { SurrealODataV4Middleware } from '../express/odata-middleware';
-import { ODataExpressTable } from '../types';
+import { ODataExpressTable } from '../express/types';
 
 let procDb: ChildProcessWithoutNullStreams;
 beforeAll(async () => {

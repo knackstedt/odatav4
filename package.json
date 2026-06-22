@@ -11,6 +11,11 @@
             "types": "./dist/main.d.ts",
             "import": "./dist/odatav4.js",
             "require": "./dist/odatav4.cjs"
+        },
+        "./express": {
+            "types": "./dist/express.d.ts",
+            "import": "./dist/express.js",
+            "require": "./dist/express.cjs"
         }
     },
     "author": "Andrew G. Knackstedt",
@@ -42,5 +47,10 @@
     "peerDependencies": {
         "express": "^5.1.0",
         "surrealdb": ">=2.0.0 <3.0.0"
+    },
+    "peerDependenciesMeta": {
+        "express": {
+            "optional": true
+        }
     }
 }

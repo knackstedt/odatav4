@@ -8,15 +8,19 @@ export default defineConfig(({ mode }) => ({
     build: {
         minify: false,
         lib: {
-            // Main entry point for the library
-            entry: resolve(__dirname, 'src/main.ts'),
+            // Multiple entry points: main (parser/utils) and express middleware
+            entry: {
+                main: resolve(__dirname, 'src/main.ts'),
+                express: resolve(__dirname, 'src/express.ts'),
+            },
             name: 'ODataV4',
             // Output both ESM and CJS formats
             formats: ['es', 'cjs'],
-            fileName: (format) => {
-                if (format === 'es') return 'odatav4.js';
-                if (format === 'cjs') return 'odatav4.cjs';
-                return `odatav4.${format}.js`;
+            fileName: (format, entryName) => {
+                const name = entryName === 'main' ? 'odatav4' : entryName;
+                if (format === 'es') return `${name}.js`;
+                if (format === 'cjs') return `${name}.cjs`;
+                return `${name}.${format}.js`;
             }
         },
         sourcemap: true,

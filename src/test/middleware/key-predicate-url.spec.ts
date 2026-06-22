@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { RecordId, Surreal } from "surrealdb";
 import { SurrealODataV4Middleware } from "../../express/odata-middleware";
-import { ODataExpressConfig, ODataExpressTable } from "../../types";
+import { ODataExpressConfig, ODataExpressTable } from "../../express/types";
 
 /**
  * Tests for OData key predicate URL format:
