@@ -107,7 +107,7 @@ class ODataExpressTableConfig<T = unknown> {
      * If an empty array is specified, the action is denied for all users.
      * If the value is set to null or undefined, the action will be allowed for all users.
      *
-     * The `write` role encompasses `post`, `patch` and `delete` together.
+     * The `write` role encompasses `post`, `put`, `patch` and `delete` together.
      * The `all` role ensures that the user has at least one of the listed roles, for any method.
      */
     accessControl?: {

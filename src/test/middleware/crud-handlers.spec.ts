@@ -100,6 +100,96 @@ describe("Table-level CRUD Handlers", () => {
             expect(getHandler).not.toHaveBeenCalled();
             expect(queryMock).toHaveBeenCalled();
         });
+
+        test("applies rowLevelFilter to single-record GET query", async () => {
+            let capturedQuery = "";
+            let capturedParams: any;
+            const mockDb: any = {
+                query: mock((q: string, params: any) => {
+                    capturedQuery = q;
+                    capturedParams = params;
+                    return { collect: async () => [[]] };
+                })
+            };
+
+            const config: ODataExpressConfig = {
+                resolveDb: async () => mockDb,
+                tables: [new ODataExpressTable({
+                    table: "users",
+                    rowLevelFilter: () => ({ partial: `ownerId = $ownerId`, parameters: { ownerId: "user123" } })
+                })],
+                idGenerator: () => "gen_id"
+            };
+            const app = express();
+            app.use(express.json());
+            app.use("/odata", SurrealODataV4Middleware(config));
+
+            await request(app).get("/odata/users:foo");
+
+            expect(mockDb.query).toHaveBeenCalled();
+            // The single-record query must include the row-level filter as a WHERE clause
+            expect(capturedQuery).toContain("SELECT * FROM $id");
+            expect(capturedQuery).toContain("WHERE");
+            expect(capturedQuery).toContain("ownerId = $ownerId");
+            // The filter parameters must be merged into the query params
+            expect(capturedParams.ownerId).toBe("user123");
+        });
+
+        test("returns 404 when single-record GET is blocked by rowLevelFilter", async () => {
+            // Simulate the DB returning no rows because the row-level filter
+            // excluded the requested record.
+            let capturedQuery = "";
+            const mockDb: any = {
+                query: mock((q: string) => {
+                    capturedQuery = q;
+                    return { collect: async () => [[]] };
+                })
+            };
+
+            const config: ODataExpressConfig = {
+                resolveDb: async () => mockDb,
+                tables: [new ODataExpressTable({
+                    table: "users",
+                    rowLevelFilter: () => `ownerId = 'user123'`
+                })],
+                idGenerator: () => "gen_id"
+            };
+            const app = express();
+            app.use(express.json());
+            app.use("/odata", SurrealODataV4Middleware(config));
+
+            const res = await request(app).get("/odata/users:foo");
+
+            expect(res.status).toBe(404);
+            // Confirm the WHERE clause was actually applied to the query
+            expect(capturedQuery).toContain("WHERE");
+            expect(capturedQuery).toContain("ownerId = 'user123'");
+        });
+
+        test("rowLevelFilter does not interfere when not configured for single-record GET", async () => {
+            let capturedQuery = "";
+            const mockDb: any = {
+                query: mock((q: string) => {
+                    capturedQuery = q;
+                    return { collect: async () => [[{ id: "users:foo", name: "Alice" }]] };
+                })
+            };
+
+            const config: ODataExpressConfig = {
+                resolveDb: async () => mockDb,
+                tables: [new ODataExpressTable({ table: "users" })],
+                idGenerator: () => "gen_id"
+            };
+            const app = express();
+            app.use(express.json());
+            app.use("/odata", SurrealODataV4Middleware(config));
+
+            const res = await request(app).get("/odata/users:foo");
+
+            expect(res.status).toBe(200);
+            expect(capturedQuery).toContain("SELECT * FROM $id");
+            expect(capturedQuery).not.toContain("WHERE");
+        });
     });
 
     // -------------------------------------------------------------------------
@@ -315,6 +405,55 @@ describe("Table-level CRUD Handlers", () => {
             mockDb.query = queryMock as any;
 
             await request(app).delete("/odata/users").send({ id: "users:foo" });
+            expect(queryMock).toHaveBeenCalled();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    describe("accessControl write shorthand", () => {
+        function setupAppWithWriteAccess(roles: string[]) {
+            const mockDb = new Surreal();
+            const queryMock = mock(() => ({
+                collect: async () => [[{ id: "users:foo", name: "Upserted" }]]
+            }));
+            mockDb.query = queryMock as any;
+
+            const config: ODataExpressConfig = {
+                resolveDb: () => mockDb,
+                tables: [new ODataExpressTable({
+                    table: "users",
+                    accessControl: { write: ["admin"] }
+                })],
+                idGenerator: () => "foo"
+            };
+
+            const app = express();
+            app.use(express.json());
+            // Inject a session before the OData middleware so checkObjectAccess sees it.
+            app.use((req: any, _res, next) => {
+                req.session = { profile: { roles } };
+                next();
+            });
+            app.use("/odata", SurrealODataV4Middleware(config));
+
+            return { app, queryMock };
+        }
+
+        test("PUT is blocked by `write` role when user lacks the role", async () => {
+            const { app, queryMock } = setupAppWithWriteAccess(["user"]);
+
+            const res = await request(app).put("/odata/users:foo").send({ name: "evil" });
+
+            expect(res.status).toBe(403);
+            expect(queryMock).not.toHaveBeenCalled();
+        });
+
+        test("PUT is allowed by `write` role when user has the role", async () => {
+            const { app, queryMock } = setupAppWithWriteAccess(["admin"]);
+
+            const res = await request(app).put("/odata/users:foo").send({ name: "ok" });
+
+            expect(res.status).toBe(200);
             expect(queryMock).toHaveBeenCalled();
         });
     });

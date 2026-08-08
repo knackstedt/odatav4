@@ -297,7 +297,7 @@ const checkObjectAccess = (req: express.Request, tables: ODataExpressTable<any>[
         }
 
         // If it's something that would modify a table, check for write access.
-        if (write && ['post', 'patch', 'delete'].includes(method)) {
+        if (write && ['post', 'put', 'patch', 'delete'].includes(method)) {
             if (!write.find(r => groups.includes(r)))
                 throw { status: 403, message: "Forbidden" };
         }
@@ -795,6 +795,29 @@ export const SurrealODataV4Middleware = (
             let query = `SELECT * FROM $id`;
             let params = {};
             let fetch = tableConfig.fetch;
+
+            // Apply row-level security to single-record GET. Without this, a
+            // caller with a valid session could read any record by id, ignoring
+            // the rowLevelFilter intended to restrict which rows they may see.
+            // When a filter is configured, append it as a WHERE clause so that
+            // records the caller is not authorized to read return no rows
+            // (yielding a 404) instead of being returned unconditionally.
+            if (typeof tableConfig.rowLevelFilter === 'function') {
+                const rowFilter = tableConfig.rowLevelFilter(req);
+                let additionalWhere: string;
+                let additionalParams: Record<string, any> = {};
+
+                if (typeof rowFilter === 'string') {
+                    additionalWhere = rowFilter;
+                }
+                else {
+                    additionalWhere = rowFilter.partial;
+                    additionalParams = rowFilter.parameters || {};
+                }
+
+                query += ` WHERE ${additionalWhere}`;
+                Object.assign(params, additionalParams);
+            }
 
             if (fetch) {
                 if (!Array.isArray(fetch))
