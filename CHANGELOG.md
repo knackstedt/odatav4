@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.0.2](https://github.com/knackstedt/odatav4/compare/v5.0.1...v5.0.2) (2026-08-08)
+
+
+### Bug Fixes
+
+* include PUT method in write access control checks ([fd79178](https://github.com/knackstedt/odatav4/commit/fd791789ba86aaa94ff7ea801ccf5547f5fede1b))
+* prevent SQL injection in identifier handling and force parameterized queries in MsSql ([6a54e9d](https://github.com/knackstedt/odatav4/commit/6a54e9dc14f29ff13cf25b5851d8487d546e09d3))
+
 ### [5.0.1](https://github.com/knackstedt/odatav4/compare/v5.0.0...v5.0.1) (2026-06-22)
 
 ## [5.0.0](https://github.com/knackstedt/odatav4/compare/v4.7.1...v5.0.0) (2026-06-22)
