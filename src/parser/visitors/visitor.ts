@@ -404,7 +404,7 @@ export class Visitor {
     }
 
     protected VisitODataIdentifier(node: Lexer.Token, context: any) {
-        this[context.target] += `[${node.value.name}]`;
+        this[context.target] += `[${node.value.name.replace(/]/g, ']]')}]`;
         context.identifier = node.value.name;
     }
 

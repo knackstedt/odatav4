@@ -8,7 +8,11 @@ describe("Dialect SQL Generation", () => {
 
     it("should generate MsSql syntax for indexof", () => {
         const result = createQuery(odataQuery, {}, SQLLang.MsSql);
-        expect(result.where).toContain("(CHARINDEX('John', [Name]) - 1) > -1");
+        // MsSqlVisitor forces useParameters: true, so literals are bound as
+        // parameters rather than inlined (prevents SQL injection).
+        expect(result.where).toContain("(CHARINDEX($literal1, [Name]) - 1) > $literal2");
+        expect(result.parameters.get("$literal1")).toBe("John");
+        expect(result.parameters.get("$literal2")).toBe(-1);
     });
 
     it("should generate MySql syntax for indexof", () => {

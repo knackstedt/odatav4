@@ -5,7 +5,13 @@ import { Visitor } from "./visitor";
 
 export class MsSqlVisitor extends Visitor {
     constructor(options = <SqlOptions>{}, ast: Lexer.Token) {
-        super({ ...options, type: SQLLang.MsSql }, ast);
+        // Force parameterized literals to prevent SQL injection. The base
+        // VisitLiteral inlines SQLLiteral.convert() output directly into the
+        // query when useParameters is false, and SQLLiteral's Edm.String
+        // handler decodes OData's '' escaping without re-escaping for SQL,
+        // allowing an attacker to break out of the string literal. Binding
+        // values as parameters neutralizes the payload.
+        super({ useParameters: true, ...options, type: SQLLang.MsSql }, ast);
     }
 
     protected VisitMethodCallExpression(node: Lexer.Token, context: any) {

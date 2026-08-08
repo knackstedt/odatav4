@@ -158,9 +158,11 @@ export namespace NameOrIdentifier {
             index = backtick;
             let contentStart = index; // Save start of content
 
-            // Find closing backtick, allowing any characters except backtick
+            // Find closing backtick, allowing only safe identifier characters
             /// Lexer.BACKTICK(value, index)
             while (index < value.length && value[index] !== 0x60 && !Utils.equals(value, index, "%60")) {
+                if (!Lexer.backtickIdentifierCharacter(value[index]))
+                    throw new ODataV4ParseError({ msg: "FormatError: Invalid character in backtick-delimited identifier" });
                 index++;
             }
 

@@ -452,6 +452,15 @@ export namespace Lexer {
     export function identifierCharacter(value: number): boolean {
         return Lexer.identifierLeadingCharacter(value) || Lexer.DIGIT(value);
     }
+    // Valid characters inside a backtick-delimited identifier.
+    // Restricted to a safe set (ASCII alphanumeric, underscore, hyphen, dot)
+    // to prevent injection of SQL metacharacters through the backtick branch.
+    export function backtickIdentifierCharacter(value: number): boolean {
+        return Lexer.ALPHA(value) || Lexer.DIGIT(value) ||
+            value === 0x5f ||  // _
+            value === 0x2d ||  // -
+            value === 0x2e;    // .
+    }
     export function beginObject(value: Utils.SourceArray, index: number): number {
         let bws = Lexer.SKIPWHITESPACE(value, index);
         let start = index;
