@@ -147,9 +147,9 @@ describe('Comprehensive OData V4 Test Suite', () => {
             expect(await filter('not (Age gt 18)')).toContain("!((type::field($field1) > $literal1))");
         });
 
-        it.skip('has', async () => {
-            const result = await filter('Flags has Enum.Color\'Red\'');
-            expect(result).toBeDefined();
+        it('has', async () => {
+            const result = await filter('Flags has 4');
+            expect(result).toContain('type::field($field1) CONTAINS');
         });
 
         it('in', async () => {
@@ -181,7 +181,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
         });
 
         it('negate', async () => {
-            expect(await filter('-Price eq 5')).toBeDefined();
+            expect(await filter('-Price eq 5')).toContain("-(type::field($field1)) = $literal1");
         });
     });
 
@@ -189,7 +189,7 @@ describe('Comprehensive OData V4 Test Suite', () => {
         const filter = async (f: string) => (await parse(`$filter=${f}`)).where;
 
         it('contains', async () => {
-            expect(await filter("contains(Name, 'doe')")).toContain("type::field($field1) CONTAINS $param1");
+            expect(await filter("contains(Name, 'doe')")).toContain("type::field($field1) CONTAINS type::string($param1)");
         });
 
         it('startswith', async () => {
@@ -201,33 +201,32 @@ describe('Comprehensive OData V4 Test Suite', () => {
         });
 
         it('length', async () => {
-            // Function calls consume a parameter seed for the function name placeholder even if unused
-            expect(await filter("length(Name) eq 4")).toContain("string::len(type::field($field1)) = $literal2");
+            expect(await filter("length(Name) eq 4")).toContain("string::len(type::field($field1)) = $literal1");
         });
 
         it('indexof', async () => {
-            expect(await filter("indexof(Name, 'a') eq 1")).toContain("type::string(type::field($field1)) CONTAINS $literal2");
-            expect(await filter("indexof(Name, 'a') eq 1")).toContain("string::len(string::split(type::string(type::field($field2)), type::string($literal3))[0])");
+            expect(await filter("indexof(Name, 'a') eq 1")).toContain("type::string(type::field($field1)) CONTAINS $literal1");
+            expect(await filter("indexof(Name, 'a') eq 1")).toContain("string::len(string::split(type::string(type::field($field2)), type::string($literal2))[0])");
         });
 
         it('substring', async () => {
-            expect(await filter("substring(Name, 1) eq 'ohn'")).toBeDefined();
+            expect(await filter("substring(Name, 1) eq 'ohn'")).toContain("string::slice(type::field($field1), $literal1) = $literal2");
         });
 
         it('tolower', async () => {
-            expect(await filter("tolower(Name) eq 'john'")).toContain("string::lowercase(type::field($field1)) = $literal2");
+            expect(await filter("tolower(Name) eq 'john'")).toContain("string::lowercase(type::field($field1)) = $literal1");
         });
 
         it('toupper', async () => {
-            expect(await filter("toupper(Name) eq 'JOHN'")).toContain("string::uppercase(type::field($field1)) = $literal2");
+            expect(await filter("toupper(Name) eq 'JOHN'")).toContain("string::uppercase(type::field($field1)) = $literal1");
         });
 
         it('trim', async () => {
-            expect(await filter("trim(Name) eq 'John'")).toContain("string::trim(type::field($field1)) = $literal2");
+            expect(await filter("trim(Name) eq 'John'")).toContain("string::trim(type::field($field1)) = $literal1");
         });
 
         it('concat', async () => {
-            expect(await filter("concat(Name, ' Doe') eq 'John Doe'")).toContain("string::concat(type::field($field1), $literal2) = $literal3");
+            expect(await filter("concat(Name, ' Doe') eq 'John Doe'")).toContain("string::concat(type::field($field1), $literal1) = $literal2");
         });
     });
 
@@ -242,41 +241,47 @@ describe('Comprehensive OData V4 Test Suite', () => {
         it('second', async () => expect(await filter("second(BirthDate) eq 0")).toContain("time::second(type::field($field1))"));
         it('now', async () => expect(await filter("BirthDate lt now()")).toContain("time::now()"));
 
-        it('fractionalseconds', async () => expect(await filter("fractionalseconds(BirthDate) gt 0")).toBeDefined());
-        it('date', async () => expect(await filter("date(BirthDate) eq 2020-01-01")).toBeDefined());
-        it('time', async () => expect(await filter("time(BirthDate) eq 12:00:00")).toBeDefined());
+        it('fractionalseconds', async () => expect(await filter("fractionalseconds(BirthDate) gt 0")).toContain("time::nano(type::field($field1)) > $literal1"));
+        it('date', async () => expect(await filter("date(BirthDate) eq 2020-01-01")).toContain("time::floor(type::field($field1), 1d) = $literal1"));
+        it('time', async () => expect(await filter("time(BirthDate) eq 12:00:00")).toContain("time::format(type::field($field1), \"%T\") = $literal1"));
     });
 
     describe('Filter Operations - Math Functions', () => {
         const filter = async (f: string) => (await parse(`$filter=${f}`)).where;
 
-        it('round', async () => expect(await filter("round(Price) eq 10")).toContain("math::round(type::field($field1)) = $literal2"));
-        it('floor', async () => expect(await filter("floor(Price) eq 10")).toContain("math::floor(type::field($field1)) = $literal2"));
-        it('ceiling', async () => expect(await filter("ceiling(Price) eq 10")).toContain("math::ceil(type::field($field1)) = $literal2"));
+        it('round', async () => expect(await filter("round(Price) eq 10")).toContain("math::round(type::field($field1)) = $literal1"));
+        it('floor', async () => expect(await filter("floor(Price) eq 10")).toContain("math::floor(type::field($field1)) = $literal1"));
+        it('ceiling', async () => expect(await filter("ceiling(Price) eq 10")).toContain("math::ceil(type::field($field1)) = $literal1"));
     });
 
     describe('Filter Operations - Type Functions', () => {
         const filter = async (f: string) => (await parse(`$filter=${f}`)).where;
 
-        it.skip('isof', async () => expect(await filter("isof(type.name)")).toBeDefined());
-        it.skip('cast', async () => expect(await filter("cast(Name, 'Edm.String')")).toBeDefined());
+        it('isof', async () => {
+            const result = await filter("isof(Name, 'Edm.String')");
+            expect(result).toContain("type::is_string(");
+        });
+        it('cast', async () => {
+            const result = await filter("cast(Name, 'Edm.String')");
+            expect(result).toContain("type::string(");
+        });
     });
 
     describe('Filter Operations - Geo Functions', () => {
         const filter = async (f: string) => (await parse(`$filter=${f}`)).where;
 
         it('geo.distance', async () => {
-            // Location -> $field1, Point(1 2) -> $literal2, 10 -> $literal3
-            expect(await filter("geo.distance(Location, geography'Point(1 2)') lt 10")).toContain("geo::distance(type::field($field1), (1, 2)) < $literal3");
+            // Location -> $field1, Point(1 2) -> inline coords, 10 -> $literal2
+            expect(await filter("geo.distance(Location, geography'Point(1 2)') lt 10")).toContain("geo::distance(type::field($field1), (1, 2)) < $literal2");
         });
 
         it.skip('geo.intersects', async () => {
-            // Location -> $field1, Polygon -> $literal2
-            expect(await filter("geo.intersects(Location, geography'Polygon((0 0, 0 1, 1 1, 1 0, 0 0))')")).toContain("geo::contains(type::field($field1), $literal2)");
+            // SurrealDB does not have a geo::contains or geo::intersects function
+            expect(await filter("geo.intersects(Location, geography'Polygon((0 0, 0 1, 1 1, 1 0, 0 0))')")).toContain("geo::contains(");
         });
 
         it.skip('geo.length', async () => {
-            // Route -> $field1, 50 -> $literal2
+            // SurrealDB does not have a geo::length function
             expect(await filter("geo.length(Route) gt 50")).toContain("geo::length(type::field($field1)) > $literal2");
         });
     });
@@ -285,24 +290,24 @@ describe('Comprehensive OData V4 Test Suite', () => {
         const filter = async (f: string) => (await parse(`$filter=${f}`)).where;
 
         it('any', async () => {
-            expect(await filter("Comments/any(c:c/Comment eq 'Good')")).toBeDefined();
+            expect(await filter("Comments/any(c:c/Comment eq 'Good')")).toContain("type::field($field1)[WHERE type::field($field2) = $literal1] != []");
         });
 
         it('all', async () => {
-            expect(await filter("Comments/all(c:c/Score gt 5)")).toBeDefined();
+            expect(await filter("Comments/all(c:c/Score gt 5)")).toContain("type::field($field1)[WHERE !(type::field($field2) > $literal1)] = []");
         });
     });
 
     describe('Literals', () => {
         const filter = async (f: string) => (await parse(`$filter=${f}`)).where;
 
-        it('String', async () => expect(await filter("Name eq 'StringValue'")).toBeDefined());
-        it('Int', async () => expect(await filter("Age eq 123")).toBeDefined());
-        it('Float', async () => expect(await filter("Score eq 12.34")).toBeDefined());
-        it('Boolean', async () => expect(await filter("IsActive eq true")).toBeDefined());
-        it('Null', async () => expect(await filter("Name eq null")).toBeDefined());
-        it('GUID', async () => expect(await filter("Id eq 01234567-89ab-cdef-0123-456789abcdef")).toBeDefined());
-        it('Date', async () => expect(await filter("DateVal eq 2020-01-01")).toBeDefined());
+        it('String', async () => expect(await filter("Name eq 'StringValue'")).toContain("type::field($field1) = $literal1"));
+        it('Int', async () => expect(await filter("Age eq 123")).toContain("type::field($field1) = $literal1"));
+        it('Float', async () => expect(await filter("Score eq 12.34")).toContain("type::field($field1) = $literal1"));
+        it('Boolean', async () => expect(await filter("IsActive eq true")).toContain("type::field($field1) = $literal1"));
+        it('Null', async () => expect(await filter("Name eq null")).toContain("type::field($field1) = $literal1"));
+        it('GUID', async () => expect(await filter("Id eq 01234567-89ab-cdef-0123-456789abcdef")).toContain("type::field($field1) = $literal1"));
+        it('Date', async () => expect(await filter("DateVal eq 2020-01-01")).toContain("type::field($field1) = $literal1"));
     });
 
     describe('Complex Scenarios', () => {
@@ -320,9 +325,9 @@ describe('Comprehensive OData V4 Test Suite', () => {
 
         it('Multiple system options', async () => {
             const result = await parse('$filter=Age gt 18&$select=Name,Age&$orderby=Age desc&$top=5');
-            expect(result.where).toBeDefined();
-            expect(result.select).toBeDefined();
-            expect(result.orderby).toBeDefined();
+            expect(result.where).toContain("type::field($field1) > $literal1");
+            expect(result.select).toBe("type::field($select0) AS `Name`, type::field($select1) AS `Age`");
+            expect(result.orderby).toBe("`Age` DESC");
             expect(result.limit).toBe(5);
         });
     });

@@ -11,12 +11,12 @@ export namespace Expressions {
             ArrayOrObject.arrayOrObject(value, index) ||
             rootExpr(value, index) ||
             methodCallExpr(value, index) ||
+            isofExpr(value, index) ||
+            castExpr(value, index) ||
             firstMemberExpr(value, index) ||
             functionExpr(value, index) ||
             negateExpr(value, index) ||
-            parenExpr(value, index) ||
-            castExpr(value, index) ||
-            isofExpr(value, index);
+            parenExpr(value, index);
 
         if (!token) return;
 
@@ -212,9 +212,12 @@ export namespace Expressions {
     export function modExpr(value: Utils.SourceArray, index: number): Lexer.Token { return leftRightExpr(value, index, "mod", Lexer.TokenType.ModExpression); }
 
     export function notExpr(value: Utils.SourceArray, index: number): Lexer.Token {
-        if (
-            !Utils.stringify(value, index, index + 3).toLowerCase().startsWith("not")
-        ) return;
+        // Fast check: first 3 characters must be "not" (case-insensitive)
+        const c0 = value[index], c1 = value[index + 1], c2 = value[index + 2];
+        if (!((c0 === 0x6e || c0 === 0x4e) && // n or N
+              (c1 === 0x6f || c1 === 0x4f) && // o or O
+              (c2 === 0x74 || c2 === 0x54)))   // t or T
+            return;
 
         let start = index;
         index += 3;
@@ -222,7 +225,10 @@ export namespace Expressions {
         // OData V4 says RWS is required, but many consumers use not(...)
         if (rws === index && value[index] !== 0x28) return;
         index = rws;
-        let token = boolCommonExpr(value, index);
+        // Use commonExpr/boolParenExpr instead of boolCommonExpr to avoid
+        // consuming the and/or chain. In OData V4, 'not' has higher precedence
+        // than 'and'/'or', so not(X) and Y should parse as (not X) and Y.
+        let token = boolParenExpr(value, index) || commonExpr(value, index);
         if (!token) return;
 
         return Lexer.tokenize(value, start, token.next, token, Lexer.TokenType.NotExpression);
@@ -249,14 +255,24 @@ export namespace Expressions {
         let start = index;
         index = open;
         index = Lexer.SKIPWHITESPACE(value, index);
-        let token = commonExpr(value, index);
+        // Try notExpr first so that not(...) inside parentheses is parsed
+        // as a NOT expression rather than a member/identifier expression.
+        // Fast path: skip notExpr if content doesn't start with 'n' or 'N'
+        let token;
+        const firstChar = value[index];
+        if (firstChar === 0x6e || firstChar === 0x4e) { // 'n' or 'N'
+            token = notExpr(value, index);
+        }
+        if (!token) token = commonExpr(value, index);
         if (!token) return;
         index = Lexer.SKIPWHITESPACE(value, token.next);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
         index = close;
 
-        return Lexer.tokenize(value, start, index, token.value, Lexer.TokenType.ParenExpression);
+        // Pass the full token (not token.value) so that NotExpression
+        // wrapping is preserved when not(...) is inside parentheses.
+        return Lexer.tokenize(value, start, index, token, Lexer.TokenType.ParenExpression);
     }
 
     export function boolMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token {
@@ -291,6 +307,7 @@ export namespace Expressions {
             roundMethodCallExpr(value, index) ||
             floorMethodCallExpr(value, index) ||
             ceilingMethodCallExpr(value, index) ||
+            absMethodCallExpr(value, index) ||
             distanceMethodCallExpr(value, index) ||
             geoLengthMethodCallExpr(value, index) ||
             totalOffsetMinutesMethodCallExpr(value, index) ||
@@ -369,10 +386,34 @@ export namespace Expressions {
     export function roundMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token { return methodCallExprFactory(value, index, "round", 1); }
     export function floorMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token { return methodCallExprFactory(value, index, "floor", 1); }
     export function ceilingMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token { return methodCallExprFactory(value, index, "ceiling", 1); }
+    export function absMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token { return methodCallExprFactory(value, index, "abs", 1); }
 
     export function distanceMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token { return methodCallExprFactory(value, index, "geo.distance", 2); }
     export function geoLengthMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token { return methodCallExprFactory(value, index, "geo.length", 1); }
     export function intersectsMethodCallExpr(value: Utils.SourceArray, index: number): Lexer.Token { return methodCallExprFactory(value, index, "geo.intersects", 2); }
+
+    /**
+     * Parse a type name that may be quoted with single quotes (e.g. 'Edm.String')
+     * per the OData V4 grammar, or unquoted. Returns the type name token and the
+     * index after it, or undefined if parsing fails.
+     */
+    function parseTypeName(value: Utils.SourceArray, index: number): { token: Lexer.Token, next: number } | undefined {
+        let squote = Lexer.SQUOTE(value, index);
+        if (squote) {
+            let typeName = NameOrIdentifier.qualifiedTypeName(value, squote);
+            if (!typeName) return;
+            let endSquote = Lexer.SQUOTE(value, typeName.next);
+            if (!endSquote) return;
+            // Adjust the token's raw to include quotes
+            typeName.position = index;
+            typeName.next = endSquote;
+            typeName.raw = Utils.stringify(value, typeName.position, typeName.next);
+            return { token: typeName, next: endSquote };
+        }
+        let typeName = NameOrIdentifier.qualifiedTypeName(value, index);
+        if (!typeName) return;
+        return { token: typeName, next: typeName.next };
+    }
 
     export function isofExpr(value: Utils.SourceArray, index: number): Lexer.Token {
         if (!Utils.equals(value, index, "isof")) return;
@@ -391,9 +432,10 @@ export namespace Expressions {
             index = comma;
             index = Lexer.SKIPWHITESPACE(value, index);
         }
-        let typeName = NameOrIdentifier.qualifiedTypeName(value, index);
-        if (!typeName) return;
-        index = typeName.next;
+        let parsed = parseTypeName(value, index);
+        if (!parsed) return;
+        let typeName = parsed.token;
+        index = parsed.next;
         index = Lexer.SKIPWHITESPACE(value, index);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;
@@ -421,9 +463,10 @@ export namespace Expressions {
             index = comma;
             index = Lexer.SKIPWHITESPACE(value, index);
         }
-        let typeName = NameOrIdentifier.qualifiedTypeName(value, index);
-        if (!typeName) return;
-        index = typeName.next;
+        let parsed = parseTypeName(value, index);
+        if (!parsed) return;
+        let typeName = parsed.token;
+        index = parsed.next;
         index = Lexer.SKIPWHITESPACE(value, index);
         let close = Lexer.CLOSE(value, index);
         if (!close) return;

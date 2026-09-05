@@ -29,13 +29,11 @@ export namespace PrimitiveLiteral {
                     }
                 }
             }
-            // If it matched the first 8 hex digits, it's highly likely a GUID.
-            // Throw error if subsequent checks fail.
-            throw new ODataV4ParseError({
-                msg: "Invalid GUID format",
-                value: value,
-                index: index
-            });
+            // If it matched the first 8 hex digits but the full GUID pattern
+            // didn't match, return undefined instead of throwing. This allows
+            // the parser to try other literal types (e.g., integer) for values
+            // like 2147483647 that happen to start with 8 hex digits.
+            return;
         }
     }
     export function sbyteValue(value: Utils.SourceArray, index: number): Lexer.Token {
@@ -91,7 +89,13 @@ export namespace PrimitiveLiteral {
         if (next) {
             if (Lexer.DIGIT(value[next])) return;
             let val = Utils.stringify(value, index, next);
-            if (val >= "0" && val <= (value[start] === 0x2d ? "9223372036854775808" : "9223372036854775807")) return Lexer.tokenize(value, start, next, "Edm.Int64", Lexer.TokenType.Literal);
+            // Use BigInt for correct numeric comparison instead of lexicographic
+            // string comparison (which incorrectly rejects 9999999999999 as
+            // being > 9223372036854775807). `val` is the digit part only (sign
+            // was stripped), so bigVal is always the absolute value.
+            let bigVal = BigInt(val);
+            let maxVal = value[start] === 0x2d ? 9223372036854775808n : 9223372036854775807n;
+            if (bigVal <= maxVal) return Lexer.tokenize(value, start, next, "Edm.Int64", Lexer.TokenType.Literal);
         }
     }
     export function decimalValue(value: Utils.SourceArray, index: number): Lexer.Token {
@@ -239,9 +243,17 @@ export namespace PrimitiveLiteral {
                 if (squote) {
                     // Found a single quote - check if it's escaped (doubled)
                     let nextSquote = Lexer.SQUOTE(value, squote);
-                    if (nextSquote) {
+                    // An empty string '' is NOT an escaped quote - the second
+                    // quote is the closing quote. Only treat '' as escaped if
+                    // we've already read at least one character.
+                    if (nextSquote && squote > start + 1) {
                         // This is an escaped quote (''), continue reading
                         index = nextSquote;
+                    }
+                    else if (nextSquote && squote === start + 1) {
+                        // Empty string '' - the second quote is the closing quote
+                        index = squote;
+                        return Lexer.tokenize(value, start, index, "Edm.String", Lexer.TokenType.Literal);
                     }
                     else {
                         // This is the closing quote
@@ -257,9 +269,17 @@ export namespace PrimitiveLiteral {
             else { // double quote
                 if (Lexer.DQUOTE(value[index])) {
                     // Found a double quote - check if it's escaped (doubled)
-                    if (Lexer.DQUOTE(value[index + 1])) {
+                    // An empty string "" is NOT an escaped quote - the second
+                    // quote is the closing quote. Only treat "" as escaped if
+                    // we've already read at least one character.
+                    if (Lexer.DQUOTE(value[index + 1]) && index > start + 1) {
                         // This is an escaped quote (""), continue reading
                         index += 2;
+                    }
+                    else if (Lexer.DQUOTE(value[index + 1]) && index === start + 1) {
+                        // Empty string "" - the second quote is the closing quote
+                        index++;
+                        return Lexer.tokenize(value, start, index, "Edm.String", Lexer.TokenType.Literal);
                     }
                     else {
                         // This is the closing quote

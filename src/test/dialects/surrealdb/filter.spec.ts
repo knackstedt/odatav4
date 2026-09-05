@@ -124,7 +124,7 @@ describe('Logical operators', () => {
 describe('String functions', () => {
     it('contains function', async () => {
         const result = await processFilter("$filter=contains(name, 'oh')");
-        expect(result).toContain("type::field($field1) CONTAINS $param1");
+        expect(result).toContain("type::field($field1) CONTAINS type::string($param1)");
     });
 
     it('startswith function', async () => {
@@ -208,13 +208,6 @@ describe('Valid query handling', () => {
     it('invalid operator', async () => {
         expect(processFilter("$filter=value INVALID 123")).rejects.toThrow();
     });
-
-    // TODO:
-    // it('invalid key', () => {
-    //     expect(() => {
-    //         processFilter("$filter=va.lue eq 123");
-    //     }).toThrow();
-    // });
 
     it('invalid value', async () => {
         expect(processFilter("$filter=value eq str'ing")).rejects.toThrow();

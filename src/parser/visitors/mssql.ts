@@ -27,6 +27,32 @@ export class MsSqlVisitor extends Visitor {
                 this.Visit(params[0], context); // string
                 this[target] += `) - 1)`;
                 break;
+            case "round":
+                // MSSQL ROUND requires a precision argument
+                this[target] += "ROUND(";
+                this.Visit(params[0], context);
+                this[target] += ", 0)";
+                break;
+            case "date":
+                this[target] += "CAST(";
+                this.Visit(params[0], context);
+                this[target] += " AS DATE)";
+                break;
+            case "time":
+                this[target] += "CAST(";
+                this.Visit(params[0], context);
+                this[target] += " AS TIME)";
+                break;
+            case "fractionalseconds":
+                this[target] += "DATEPART(NANOSECOND, ";
+                this.Visit(params[0], context);
+                this[target] += ") / 1000000000.0";
+                break;
+            case "totalseconds":
+                this[target] += "DATEDIFF(SECOND, '1970-01-01', ";
+                this.Visit(params[0], context);
+                this[target] += ")";
+                break;
             default:
                 super.VisitMethodCallExpression(node, context);
                 break;

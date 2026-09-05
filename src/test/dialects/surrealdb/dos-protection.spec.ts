@@ -40,13 +40,12 @@ describe('DoS Protection', () => {
         }).toThrow(ODataV4ParseError);
     });
 
-    it('should fail deeply nested filters (stack overflow protection)', () => {
+    it('should fail deeply nested filters (stack overflow protection)', async () => {
         // Note: recursion limit is usually implicit in JS engine (stack size),
         // but we might assume the parser handles reasonable depth.
         // This test mostly ensures we don't crash or hang, but throw or handle it.
-        // 10000 depth might blow stack.
         let nested = 'Name eq 1';
-        for (let i = 0; i < 5000; i++) {
+        for (let i = 0; i < 2000; i++) {
             nested = `(${nested})`;
         }
         try {

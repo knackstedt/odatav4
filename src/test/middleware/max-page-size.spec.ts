@@ -40,37 +40,37 @@ describe("OData V4 - Max Page Size Config", () => {
         expect(response.body.value.length).toBe(3);
     });
 
-    test("should provide @odata.nextlink when more results exist", async () => {
+    test("should provide @odata.nextLink when more results exist", async () => {
         const response = await request(app)
             .get("/api/odata-limited/post")
             .expect(200);
 
         expect(response.body.value).toBeArray();
         expect(response.body.value.length).toBe(5);
-        expect(response.body['@odata.nextlink']).toBeDefined();
+        expect(response.body['@odata.nextLink']).toBeDefined();
 
-        const nextLink = response.body['@odata.nextlink'];
+        const nextLink = response.body['@odata.nextLink'];
         // URL parameters might be encoded: $skip -> %24skip
         const decodedLink = decodeURIComponent(nextLink);
         expect(decodedLink).toContain('$skip=5');
         expect(decodedLink).toContain('$top=5');
     });
 
-    test("should include correct @odata.nextlink when using $skip", async () => {
+    test("should include correct @odata.nextLink when using $skip", async () => {
         const response = await request(app)
             .get("/api/odata-limited/post?$skip=2")
             .expect(200);
 
         expect(response.body.value).toBeArray();
         expect(response.body.value.length).toBe(5);
-        expect(response.body['@odata.nextlink']).toBeDefined();
+        expect(response.body['@odata.nextLink']).toBeDefined();
 
-        const nextLink = response.body['@odata.nextlink'];
+        const nextLink = response.body['@odata.nextLink'];
         // original skip 2 + returned 5 = 7
         expect(decodeURIComponent(nextLink)).toContain('$skip=7');
     });
 
-    test("should not provide @odata.nextlink on last page", async () => {
+    test("should not provide @odata.nextLink on last page", async () => {
         // Assuming we have less than 100 posts (seed data typically small)
         // Let's interpret 'at end' as skip very high
         const response = await request(app)
@@ -78,6 +78,6 @@ describe("OData V4 - Max Page Size Config", () => {
             .expect(200);
 
         expect(response.body.value).toBeArray();
-        expect(response.body).not.toHaveProperty('@odata.nextlink');
+        expect(response.body).not.toHaveProperty('@odata.nextLink');
     });
 });

@@ -32,10 +32,8 @@ describe("Dialect SQL Generation", () => {
     });
 
     it("should generate Oracle syntax for indexof", () => {
-        // OracleVisitor extends Visitor and uses default implementation currently
+        // OracleVisitor overrides indexof to use INSTR (Oracle's native string search)
         const result = createQuery(odataQuery, { useParameters: true }, SQLLang.Oracle);
-        // It might be different if I implemented specific Oracle logic, but I didn't override MethodCallExpression in OracleVisitor.
-        // It should match generic Visitor.
-        expect(result.where).toContain("LOCATE");
+        expect(result.where).toContain("INSTR");
     });
 });

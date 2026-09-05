@@ -274,55 +274,68 @@ describe("OData V4 - $filter Tests", () => {
     });
 
     describe("Date/Time Functions", () => {
-        test("should filter with 'year' function (if date fields exist)", async () => {
-            // Note: This test may fail if there are no date fields in the test data
+        // Seed data sets BirthDate = '1990-01-01T12:00:00.123Z' for all users
+        test("should filter with 'year' function", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$top=5")
+                .get("/api/odata/user?$filter=year(BirthDate) eq 1990&$top=5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
-            // If date fields are added to test data, uncomment below:
-            // .get("/api/odata/post?$filter=year(createdAt) eq 2024")
+            expect(response.body.value.length).toBeGreaterThan(0);
         });
 
         test("should filter with 'month' function", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$top=5")
+                .get("/api/odata/user?$filter=month(BirthDate) eq 1&$top=5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
+            expect(response.body.value.length).toBeGreaterThan(0);
         });
 
         test("should filter with 'day' function", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$top=5")
+                .get("/api/odata/user?$filter=day(BirthDate) eq 1&$top=5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
+            expect(response.body.value.length).toBeGreaterThan(0);
         });
 
         test("should filter with 'hour' function", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$top=5")
+                .get("/api/odata/user?$filter=hour(BirthDate) eq 12&$top=5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
+            expect(response.body.value.length).toBeGreaterThan(0);
         });
 
         test("should filter with 'minute' function", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$top=5")
+                .get("/api/odata/user?$filter=minute(BirthDate) eq 0&$top=5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
+            expect(response.body.value.length).toBeGreaterThan(0);
         });
 
         test("should filter with 'second' function", async () => {
             const response = await request(app)
-                .get("/api/odata/post?$top=5")
+                .get("/api/odata/user?$filter=second(BirthDate) eq 0&$top=5")
                 .expect(200);
 
             expect(response.body.value).toBeArray();
+            expect(response.body.value.length).toBeGreaterThan(0);
+        });
+
+        test("should return no results for non-matching year", async () => {
+            const response = await request(app)
+                .get("/api/odata/user?$filter=year(BirthDate) eq 1800&$top=5")
+                .expect(200);
+
+            expect(response.body.value).toBeArray();
+            expect(response.body.value.length).toBe(0);
         });
     });
 });
@@ -494,9 +507,8 @@ describe("OData V4 - $count Tests", () => {
             .get("/api/odata/post?$count=false&$top=10")
             .expect(200);
 
-        // When count is false, @odata.count should not be present or should be undefined
-        // (implementation may vary)
         expect(response.body.value).toBeArray();
+        expect(response.body['@odata.count']).toBeUndefined();
     });
 
     test("should include count with filters", async () => {
@@ -605,35 +617,35 @@ describe("OData V4 - $search Tests (Partial Support)", () => {
     });
 });
 
-describe("OData V4 - $format Tests (WIP)", () => {
+describe("OData V4 - $format Tests", () => {
     test("should accept $format=json", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$format=json&$top=5");
+            .get("/api/odata/post?$format=json&$top=5")
+            .expect(200);
 
-        // Accept 200 (implemented) or other status codes (not fully implemented)
-        expect([200, 501]).toContain(response.status);
-
-        if (response.status === 200) {
-            expect(response.body.value).toBeArray();
-        }
+        expect(response.body.value).toBeArray();
     });
 
     test("should handle $format=xml request", async () => {
+        // XML serialization is not implemented; the parameter is accepted and
+        // the response is returned as JSON rather than being rejected.
         const response = await request(app)
-            .get("/api/odata/post?$format=xml&$top=5");
+            .get("/api/odata/post?$format=xml&$top=5")
+            .expect(200);
 
-        // XML format may not be implemented, accept various status codes
-        expect([200, 400, 501]).toContain(response.status);
+        expect(response.body.value).toBeArray();
     });
 });
 
-describe("OData V4 - $skiptoken Tests (WIP)", () => {
+describe("OData V4 - $skiptoken Tests", () => {
     test("should handle $skiptoken parameter", async () => {
+        // $skiptoken is not actively used for paging (server-side cursor), but
+        // the parameter is accepted without error and results are returned.
         const response = await request(app)
-            .get("/api/odata/post?$skiptoken=token123&$top=5");
+            .get("/api/odata/post?$skiptoken=token123&$top=5")
+            .expect(200);
 
-        // $skiptoken is WIP, may not be fully implemented
-        expect([200, 400, 501]).toContain(response.status);
+        expect(response.body.value).toBeArray();
     });
 });
 
@@ -675,9 +687,9 @@ describe("OData V4 - Complex Combination Tests", () => {
             .expect(200);
 
         expect(response.body.value).toBeArray();
-        if (response.body['@odata.count'] !== undefined) {
-            expect(response.body['@odata.count']).toBeGreaterThanOrEqual(0);
-        }
+        expect(response.body['@odata.count']).toBeDefined();
+        expect(typeof response.body['@odata.count']).toBe('number');
+        expect(response.body['@odata.count']).toBeGreaterThanOrEqual(response.body.value.length);
     });
 
     test("should handle nested arithmetic and string functions", async () => {
@@ -709,10 +721,10 @@ describe("OData V4 - Edge Cases and Error Handling", () => {
 
     test("should handle malformed filter gracefully", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$filter=invalid syntax here");
+            .get("/api/odata/post?$filter=invalid syntax here")
+            .expect(400);
 
-        // Should return an error status (400 or 500)
-        expect([400, 500]).toContain(response.status);
+        expect(response.body.error).toBeDefined();
     });
 
     test("should handle $top with value 0", async () => {
@@ -734,36 +746,37 @@ describe("OData V4 - Edge Cases and Error Handling", () => {
 
     test("should handle negative $skip gracefully", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$skip=-5");
+            .get("/api/odata/post?$skip=-5")
+            .expect(400);
 
-        // Implementation may accept or reject negative skip
-        expect([200, 400]).toContain(response.status);
+        expect(response.body.error).toBeDefined();
     });
 
     test("should handle invalid field names in $select", async () => {
+        // SurrealDB returns the requested (non-existent) field as an empty object.
         const response = await request(app)
-            .get("/api/odata/post?$select=nonExistentField&$top=1");
+            .get("/api/odata/post?$select=nonExistentField&$top=1")
+            .expect(200);
 
-        // Should either ignore or error
-        expect([200, 400]).toContain(response.status);
+        expect(response.body.value).toBeArray();
     });
 
 
     test("should handle invalid field names in $orderby", async () => {
         const response = await request(app)
-            .get("/api/odata-restricted/post?$orderby=nonExistentField asc");
+            .get("/api/odata-restricted/post?$orderby=nonExistentField asc")
+            .expect(400);
 
-        // Should return an error
-        expect([400]).toContain(response.status);
+        expect(response.body.error).toBeDefined();
     });
 
 
     test("should handle special characters in filter values", async () => {
         const response = await request(app)
-            .get("/api/odata/post?$filter=contains(title, 'test''s')&$top=5");
+            .get("/api/odata/post?$filter=contains(title, 'test''s')&$top=5")
+            .expect(200);
 
-        // May or may not find results, but should not crash
-        expect([200, 400]).toContain(response.status);
+        expect(response.body.value).toBeArray();
     });
 });
 

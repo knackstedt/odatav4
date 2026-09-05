@@ -1,7 +1,6 @@
 {
     "compilerOptions": {
         "sourceMap": true,
-        "downlevelIteration": false,
         "importHelpers": true,
         "moduleResolution": "bundler",
         "resolveJsonModule": true,

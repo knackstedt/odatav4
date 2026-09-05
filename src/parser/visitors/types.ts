@@ -5,7 +5,8 @@ export enum SQLLang {
     MySql,
     PostgreSql,
     Oracle,
-    SurrealDB
+    SurrealDB,
+    NodeSqlite
 }
 
 export interface SqlOptions {

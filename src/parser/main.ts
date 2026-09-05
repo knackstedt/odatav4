@@ -1,6 +1,6 @@
 import Lexer from './lexer';
 import { filter, query } from "./parser";
-import { MsSqlVisitor, MySqlVisitor, OracleVisitor, PostgreSqlVisitor, SQLLang, type SqlOptions, SurrealDbVisitor, Visitor } from "./visitors";
+import { MsSqlVisitor, MySqlVisitor, NodeSqliteVisitor, OracleVisitor, PostgreSqlVisitor, SQLLang, type SqlOptions, SurrealDbVisitor, Visitor } from "./visitors";
 
 export { SQLLang } from "./visitors";
 export type { SqlOptions } from "./visitors";
@@ -34,6 +34,9 @@ export function createQuery(odataQuery: string | Lexer.Token, options = <SqlOpti
             break;
         case SQLLang.Oracle:
             visitor = new OracleVisitor(options, ast);
+            break;
+        case SQLLang.NodeSqlite:
+            visitor = new NodeSqliteVisitor(options, ast);
             break;
         default:
             visitor = new Visitor(options, ast);
@@ -72,6 +75,9 @@ export function createFilter(odataFilter: string | Lexer.Token, options = <SqlOp
             break;
         case SQLLang.Oracle:
             visitor = new OracleVisitor(options, ast);
+            break;
+        case SQLLang.NodeSqlite:
+            visitor = new NodeSqliteVisitor(options, ast);
             break;
         default:
             visitor = new Visitor(options, ast);

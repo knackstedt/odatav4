@@ -18,17 +18,29 @@ export class OracleVisitor extends Visitor {
         return this;
     }
 
-    // Override generic parameter handling if Oracle needs specific :param syntax during VisitLiteral/etc?
-    // Original code seemed to replace `?` which implies it generated `?` first?
-    // But `Visitor` generates names like `$literal1`.
-    // Let's look at `asOracleSql` in original `visitor.ts`.
-    // It replaced `?` with named parameters.
-    // But `VisitLiteral` uses `$literalN`.
-    // Wait, original `Visitor` code:
-    // if (this.options.useParameters) ... parameters.set(name, value); this[target] += name;
-    // else ...
-    // The `asOracleSql` method in original `visitor.ts` seems conflicting or for a different mode (ANSI with ?).
-    // Given the lack of extensive Oracle tests, I will stick to basic structure and port `asOracleSql` logic if it makes sense.
-    // Actually, `Visitor` base handles parameters with `$name`. Oracle usually uses `:name`.
-    // I can override `VisitLiteral` etc or just `from`.
+    protected VisitMethodCallExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+        const method = node.value.method;
+        const params = node.value.parameters || [];
+
+        switch (method) {
+            case "indexof":
+                this[target] += `(INSTR(`;
+                this.Visit(params[0], context); // string
+                this[target] += ", ";
+                this.Visit(params[1], context); // substring
+                this[target] += `) - 1)`;
+                break;
+            case "totalseconds":
+                this[target] += "EXTRACT(DAY FROM (";
+                this.Visit(params[0], context);
+                this[target] += " - TIMESTAMP '1970-01-01 00:00:00')) * 86400 + TO_NUMBER(TO_CHAR(";
+                this.Visit(params[0], context);
+                this[target] += ", 'SSSSS'))";
+                break;
+            default:
+                super.VisitMethodCallExpression(node, context);
+                break;
+        }
+    }
 }

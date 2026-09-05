@@ -19,14 +19,30 @@ beforeAll(async () => {
     });
 
     const db = new Surreal();
-    await db.connect('ws://127.0.0.1:' + dbPort, {
-        database: 'test',
-        namespace: 'test',
-        authentication: {
-            username: 'root',
-            password: 'root'
+    // Retry connection - SurrealDB may take a moment to be ready.
+    // Connect without namespace first, then define namespace/database explicitly
+    // (SurrealDB 3.x requires explicit namespace creation).
+    let connected = false;
+    for (let attempt = 0; attempt < 15 && !connected; attempt++) {
+        try {
+            await db.connect('ws://127.0.0.1:' + dbPort, {
+                authentication: {
+                    username: 'root',
+                    password: 'root'
+                }
+            });
+            connected = true;
+        } catch {
+            await new Promise(r => setTimeout(r, 500));
         }
-    });
+    }
+    if (!connected) throw new Error('Failed to connect to SurrealDB after 15 attempts');
+
+    // Define namespace and database, then switch to them
+    await db.query('DEFINE NAMESPACE test;').collect();
+    await db.use({ namespace: 'test' });
+    await db.query('DEFINE DATABASE test;').collect();
+    await db.use({ namespace: 'test', database: 'test' });
     globalThis.db = db;
 
     const textData = readFileSync(__dirname + '/seed-data.json', 'utf-8');

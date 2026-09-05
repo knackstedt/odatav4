@@ -265,7 +265,10 @@ export class Visitor {
     }
 
     protected VisitNotExpression(node: Lexer.Token, context: any) {
+        const target = context?.target || 'where';
+        this[target] += "NOT (";
         this.Visit(node.value, context);
+        this[target] += ")";
     }
 
     protected VisitInExpression(node: Lexer.Token, context: any) {
@@ -549,6 +552,7 @@ export class Visitor {
                 break;
             case "floor":
             case "ceiling":
+            case "abs":
             case "year":
             case "month":
             case "day":
@@ -566,6 +570,69 @@ export class Visitor {
 
             case "trim":
                 this[target] += "TRIM(";
+                this.Visit(params[0], context);
+                this[target] += ")";
+                break;
+
+            case "substring":
+                // OData substring is 0-based; SQL SUBSTRING is 1-based.
+                // Add 1 to the start index to convert.
+                this[target] += "SUBSTRING(";
+                this.Visit(params[0], context);
+                this[target] += ", (";
+                this.Visit(params[1], context);
+                this[target] += ") + 1";
+                if (params[2]) {
+                    this[target] += ", ";
+                    this.Visit(params[2], context);
+                }
+                this[target] += ")";
+                break;
+
+            case "concat":
+                this[target] += "CONCAT(";
+                this.Visit(params[0], context);
+                for (let i = 1; i < params.length; i++) {
+                    this[target] += ", ";
+                    this.Visit(params[i], context);
+                }
+                this[target] += ")";
+                break;
+
+            case "fractionalseconds":
+                this[target] += "EXTRACT(SECOND FROM ";
+                this.Visit(params[0], context);
+                this[target] += ") - FLOOR(EXTRACT(SECOND FROM ";
+                this.Visit(params[0], context);
+                this[target] += "))";
+                break;
+
+            case "date":
+                this[target] += "DATE(";
+                this.Visit(params[0], context);
+                this[target] += ")";
+                break;
+
+            case "time":
+                this[target] += "TIME(";
+                this.Visit(params[0], context);
+                this[target] += ")";
+                break;
+
+            case "maxdatetime":
+                this[target] += "'9999-12-31T23:59:59Z'";
+                break;
+
+            case "mindatetime":
+                this[target] += "'0001-01-01T00:00:00Z'";
+                break;
+
+            case "totaloffsetminutes":
+                this[target] += "0";
+                break;
+
+            case "totalseconds":
+                this[target] += "EXTRACT(EPOCH FROM ";
                 this.Visit(params[0], context);
                 this[target] += ")";
                 break;

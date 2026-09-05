@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { Express } from 'express';
 import express from 'express';
 import request from 'supertest';
@@ -60,6 +60,9 @@ describe('Field Types Transformation', () => {
         expect(response.body.name).toBe('Test Event');
         expect(response.body.createdAt).toBeDefined();
         expect(response.body.eventDate).toBeDefined();
+        // Verify the datetime was parsed and stored as an ISO timestamp
+        expect(new Date(response.body.createdAt).toISOString()).toBe('2024-01-15T10:30:00.000Z');
+        expect(new Date(response.body.eventDate).toISOString()).toBe('2024-02-20T14:00:00.000Z');
     });
 
     test('POST - should transform decimal field from string', async () => {
@@ -74,6 +77,7 @@ describe('Field Types Transformation', () => {
 
         expect(response.body).toBeDefined();
         expect(response.body.price).toBeDefined();
+        expect(response.body.price).toBe('99.99');
     });
 
     test('POST - should transform uuid field from string', async () => {
@@ -88,6 +92,7 @@ describe('Field Types Transformation', () => {
 
         expect(response.body).toBeDefined();
         expect(response.body.eventId).toBeDefined();
+        expect(response.body.eventId).toBe('550e8400-e29b-41d4-a716-446655440000');
     });
 
     test('POST - should transform duration field from string', async () => {
@@ -102,6 +107,7 @@ describe('Field Types Transformation', () => {
 
         expect(response.body).toBeDefined();
         expect(response.body.duration).toBeDefined();
+        expect(response.body.duration).toBe('2h30m');
     });
 
     test('POST - should transform record field from string', async () => {
@@ -119,6 +125,7 @@ describe('Field Types Transformation', () => {
 
         expect(response.body).toBeDefined();
         expect(response.body.organizerId).toBeDefined();
+        expect(response.body.organizerId).toBe('user:john');
     });
 
     test('PATCH - should transform fields on update', async () => {
@@ -144,7 +151,9 @@ describe('Field Types Transformation', () => {
 
         expect(updateResponse.body).toBeDefined();
         expect(updateResponse.body.price).toBeDefined();
+        expect(updateResponse.body.price).toBe('149.99');
         expect(updateResponse.body.eventDate).toBeDefined();
+        expect(new Date(updateResponse.body.eventDate).toISOString()).toBe('2024-03-15T09:00:00.000Z');
     });
 
     test('PUT - should transform fields on upsert', async () => {
@@ -161,7 +170,9 @@ describe('Field Types Transformation', () => {
         expect(response.body).toBeDefined();
         expect(response.body.name).toBe('Upsert Event');
         expect(response.body.createdAt).toBeDefined();
+        expect(new Date(response.body.createdAt).toISOString()).toBe('2024-01-01T00:00:00.000Z');
         expect(response.body.price).toBeDefined();
+        expect(parseFloat(response.body.price)).toBe(75.5);
     });
 
     test('POST - should handle null/undefined values gracefully', async () => {
@@ -177,6 +188,22 @@ describe('Field Types Transformation', () => {
 
         expect(response.body).toBeDefined();
         expect(response.body.name).toBe('Null Test Event');
+        // null price should be stored as null, not transformed
+        expect(response.body.price).toBeNull();
+        // undefined eventDate should be omitted from the stored record
+        expect(response.body.eventDate).toBeUndefined();
     });
 
+    afterAll(async () => {
+        // Clean up test data to avoid interfering with other test suites
+        // that share the same SurrealDB instance (e.g. express.spec.ts
+        // arithmetic tests fail if user records without numericId exist).
+        if (db) {
+            try {
+                await db.query('DELETE FROM events').collect();
+                await db.query('DELETE FROM user:john').collect();
+                await db.query('REMOVE TABLE events').collect();
+            } catch { /* ignore cleanup errors */ }
+        }
+    });
 });

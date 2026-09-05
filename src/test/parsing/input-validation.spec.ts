@@ -6,9 +6,9 @@ describe('Input Validation & Security Limits', () => {
 
     describe('$top Validation (#6)', () => {
         it('should allow $top up to default limit (500)', () => {
-            expect(() => createQuery('$top=500', { type: SQLLang.SurrealDB })).not.toThrow();
-            expect(() => createQuery('$top=250', { type: SQLLang.SurrealDB })).not.toThrow();
-            expect(() => createQuery('$top=1', { type: SQLLang.SurrealDB })).not.toThrow();
+            expect(createQuery('$top=500', { type: SQLLang.SurrealDB }).limit).toBe(500);
+            expect(createQuery('$top=250', { type: SQLLang.SurrealDB }).limit).toBe(250);
+            expect(createQuery('$top=1', { type: SQLLang.SurrealDB }).limit).toBe(1);
         });
 
         it('should reject $top exceeding default limit (500)', () => {
@@ -21,25 +21,20 @@ describe('Input Validation & Security Limits', () => {
         it('should respect custom maxPageSize limit', () => {
             expect(() => createQuery('$top=100', { type: SQLLang.SurrealDB, maxPageSize: 50 }))
                 .toThrow(ODataV4ParseError);
-            expect(() => createQuery('$top=50', { type: SQLLang.SurrealDB, maxPageSize: 50 }))
-                .not.toThrow();
+            expect(createQuery('$top=50', { type: SQLLang.SurrealDB, maxPageSize: 50 }).limit).toBe(50);
         });
 
         it('should include limit value in error message', () => {
-            try {
-                createQuery('$top=20000', { type: SQLLang.SurrealDB });
-                expect(true).toBe(false); // Should not reach here
-            } catch (e: any) {
-                expect(e.message).toContain('500');
-            }
+            expect(() => createQuery('$top=20000', { type: SQLLang.SurrealDB }))
+                .toThrow(/500/);
         });
     });
 
     describe('$skip Validation (#6)', () => {
         it('should allow $skip up to default limit (1000000)', () => {
-            expect(() => createQuery('$skip=1000000', { type: SQLLang.SurrealDB })).not.toThrow();
-            expect(() => createQuery('$skip=500000', { type: SQLLang.SurrealDB })).not.toThrow();
-            expect(() => createQuery('$skip=0', { type: SQLLang.SurrealDB })).not.toThrow();
+            expect(createQuery('$skip=1000000', { type: SQLLang.SurrealDB }).skip).toBe(1000000);
+            expect(createQuery('$skip=500000', { type: SQLLang.SurrealDB }).skip).toBe(500000);
+            expect(createQuery('$skip=0', { type: SQLLang.SurrealDB }).skip).toBe(0);
         });
 
         it('should reject $skip exceeding default limit', () => {
@@ -59,8 +54,7 @@ describe('Input Validation & Security Limits', () => {
         it('should respect custom maxSkip limit', () => {
             expect(() => createQuery('$skip=10000', { type: SQLLang.SurrealDB, maxSkip: 5000 }))
                 .toThrow(ODataV4ParseError);
-            expect(() => createQuery('$skip=5000', { type: SQLLang.SurrealDB, maxSkip: 5000 }))
-                .not.toThrow();
+            expect(createQuery('$skip=5000', { type: SQLLang.SurrealDB, maxSkip: 5000 }).skip).toBe(5000);
         });
     });
 
@@ -71,17 +65,12 @@ describe('Input Validation & Security Limits', () => {
         });
 
         it('should reject $search with meaningful error', () => {
-            try {
-                createQuery('$search=foo', { type: SQLLang.SurrealDB });
-                expect(true).toBe(false);
-            } catch (e: any) {
-                expect(e.message).toContain('disabled');
-            }
+            expect(() => createQuery('$search=foo', { type: SQLLang.SurrealDB }))
+                .toThrow(/disabled/);
         });
 
         it('should allow $search when explicitly enabled', () => {
-            expect(() => createQuery('$search=test', { type: SQLLang.SurrealDB, enableSearch: true }))
-                .not.toThrow();
+            expect(createQuery('$search=test', { type: SQLLang.SurrealDB, enableSearch: true }).search).toBe('test');
         });
     });
 
@@ -90,7 +79,8 @@ describe('Input Validation & Security Limits', () => {
             // Create a filter with many parameters
             const filters = Array.from({ length: 500 }, (_, i) => `field${i} eq ${i}`);
             const query = `$filter=${filters.join(' and ')}`;
-            expect(() => createQuery(query, { type: SQLLang.SurrealDB })).not.toThrow();
+            const result = createQuery(query, { type: SQLLang.SurrealDB });
+            expect(result.parameters.size).toBeGreaterThan(0);
         });
 
         it('should reject queries exceeding parameter limit', () => {
@@ -115,13 +105,10 @@ describe('Input Validation & Security Limits', () => {
             const filters = Array.from({ length: 1001 }, (_, i) => `field${i} eq ${i}`);
             const query = `$filter=${filters.join(' and ')}`;
 
-            try {
-                createQuery(query, { type: SQLLang.SurrealDB });
-                expect(true).toBe(false);
-            } catch (e: any) {
-                expect(e.message).toContain('parameter limit');
-                expect(e.message).toContain('1000');
-            }
+            expect(() => createQuery(query, { type: SQLLang.SurrealDB }))
+                .toThrow(/parameter limit/);
+            expect(() => createQuery(query, { type: SQLLang.SurrealDB }))
+                .toThrow(/1000/);
         });
     });
 

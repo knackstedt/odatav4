@@ -140,7 +140,7 @@ describe("OData Middleware", () => {
             const result = await RunODataV4SelectFilter(mockDb, "users", "/users?$top=10&$skip=0&$count=true");
 
             expect(result['@odata.count']).toBe(20);
-            const decodedNextLink = decodeURIComponent(result['@odata.nextlink']!);
+            const decodedNextLink = decodeURIComponent(result['@odata.nextLink']!);
             expect(decodedNextLink).toContain("$skip=10");
         });
 

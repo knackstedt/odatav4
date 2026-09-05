@@ -75,8 +75,13 @@ beforeAll(async () => {
 
 describe("Field Aliases - End-to-End Tests", () => {
     describe.skip("Basic field alias filtering", () => {
-        // TODO: Graph traversal filtering requires more complex query generation
-        // These tests need proper implementation of graph traversal in WHERE clauses
+        // SKIPPED: Graph-traversal field aliases (e.g. "->on->finding->severity")
+        // cannot be used with comparison operators. SurrealDB graph traversals
+        // return arrays of values, so `array >= N` / `array = N` do not filter
+        // correctly. Supporting this would require the visitor to rewrite
+        // comparisons on graph-traversal aliases into `IN` / `array::any(...)`
+        // expressions. See the middleware's naive alias substitution in
+        // src/parser/visitors/surrealdb.ts (VisitODataIdentifier).
         test("should filter using aliased field for graph traversal", async () => {
             const response = await request(app)
                 .get("/api/odata/scan?$filter=finding eq 'finding:1'")
@@ -131,7 +136,9 @@ describe("Field Aliases - End-to-End Tests", () => {
     });
 
     describe.skip("Complex filtering with aliases", () => {
-        // TODO: Graph traversal filtering requires more complex query generation
+        // SKIPPED: Same array-comparison limitation as Basic field alias filtering.
+        // Graph-traversal aliases return arrays, so OR/parenthesized/NOT
+        // expressions with eq/ge/gt operators do not filter correctly.
         test("should handle OR expressions with aliases", async () => {
             const response = await request(app)
                 .get("/api/odata/scan?$filter=findingSeverity eq 5 or findingSeverity eq 1")
@@ -172,8 +179,10 @@ describe("Field Aliases - End-to-End Tests", () => {
     });
 
     describe.skip("ORDER BY with aliases", () => {
-        // TODO: SurrealDB doesn't support graph traversal syntax in ORDER BY
-        // These tests require a different implementation approach
+        // SKIPPED: SurrealDB does not accept graph-traversal syntax (->) in
+        // ORDER BY at all (parse error), even when wrapped in parentheses or
+        // subqueries. Ordering by a graph-traversal alias would require
+        // post-fetch sorting in the middleware or a derived-table approach.
         test("should order by aliased field", async () => {
             const response = await request(app)
                 .get("/api/odata/scan?$orderby=findingSeverity desc&$top=10")
@@ -194,7 +203,7 @@ describe("Field Aliases - End-to-End Tests", () => {
 
     describe("Combined query options with aliases", () => {
         test.skip("should handle filter, orderby, top, and skip with aliases", async () => {
-            // TODO: SurrealDB doesn't support graph traversal in ORDER BY
+            // SKIPPED: SurrealDB does not support graph traversal in ORDER BY.
             const response = await request(app)
                 .get("/api/odata/scan?$filter=findingSeverity ge 1&$orderby=findingSeverity desc&$top=2&$skip=0")
                 .expect(200);
@@ -254,12 +263,12 @@ describe("Field Aliases - End-to-End Tests", () => {
         });
 
         test("should handle non-existent fields in aliases", async () => {
-            // This should execute but may return empty results or error depending on SurrealDB behavior
+            // No finding has severity 999, so the query should return 200 with empty results
             const response = await request(app)
-                .get("/api/odata/scan?$filter=findingSeverity eq 999");
+                .get("/api/odata/scan?$filter=findingSeverity eq 999")
+                .expect(200);
 
-            // Should not crash - either 200 with empty results or 400/500
-            expect([200, 400, 500]).toContain(response.status);
+            expect(response.body.value).toBeArray();
         });
     });
 

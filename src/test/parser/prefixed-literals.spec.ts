@@ -7,49 +7,43 @@ describe('Prefixed Literal Parsing', () => {
             const query = '$filter=createdAt eq d"2024-01-15"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
-            expect(result.parameters).toBeDefined();
+            expect(result.where).toContain('<datetime>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('2024-01-15');
         });
 
         test('should parse d\'YYYY-MM-DD\' syntax', () => {
             const query = '$filter=createdAt eq d\'2024-01-15\'';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
+            expect(result.where).toContain('<datetime>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('2024-01-15');
         });
 
         test('should parse d`YYYY-MM-DD` syntax', () => {
             const query = '$filter=createdAt eq d`2024-01-15`';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
+            expect(result.where).toContain('<datetime>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('2024-01-15');
         });
 
         test('should parse datetime with time', () => {
             const query = '$filter=createdAt eq d"2024-01-15T10:30:00Z"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.parameters).toBeDefined();
-
-            const paramValues = Array.from(result.parameters.values());
+            expect(result.where).toContain('<datetime>$literal1');
             // Date should be kept as string to preserve nanosecond precision
-            const dateParam = paramValues.find(v => typeof v === 'string' && v.includes('2024-01-15'));
-            expect(dateParam).toBeDefined();
-            expect(dateParam).toBe('2024-01-15T10:30:00Z');
+            expect(result.parameters.get('$literal1')).toBe('2024-01-15T10:30:00Z');
         });
 
         test('should handle multiple date filters', () => {
             const query = '$filter=createdAt ge d"2024-01-01" and createdAt lt d"2024-12-31"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
-            expect(result.where).toContain('>=');
-            expect(result.where).toContain('<');
+            expect(result.where).toContain('<datetime>$literal1');
+            expect(result.where).toContain('<datetime>$literal2');
+            expect(result.parameters.get('$literal1')).toBe('2024-01-01');
+            expect(result.parameters.get('$literal2')).toBe('2024-12-31');
         });
     });
 
@@ -58,78 +52,65 @@ describe('Prefixed Literal Parsing', () => {
             const query = '$filter=price eq n"99.99"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
-            expect(result.parameters).toBeDefined();
+            expect(result.where).toContain('<number>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('99.99');
         });
 
         test('should parse n\'123\' syntax', () => {
             const query = '$filter=price eq n\'99.99\'';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
+            expect(result.where).toContain('<number>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('99.99');
         });
 
         test('should parse n`123` syntax', () => {
             const query = '$filter=price eq n`99.99`';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
+            expect(result.where).toContain('<number>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('99.99');
         });
 
         test('should extract number value correctly', () => {
             const query = '$filter=price eq n"123.45"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.parameters).toBeDefined();
-
-            const paramValues = Array.from(result.parameters.values());
+            expect(result.where).toContain('<number>$literal1');
             // Number should be kept as string to preserve decimal precision
-            const numberParam = paramValues.find(v => v === '123.45');
-            expect(numberParam).toBe('123.45');
+            expect(result.parameters.get('$literal1')).toBe('123.45');
         });
 
         test('should handle integer numbers', () => {
             const query = '$filter=quantity eq n"5"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            const paramValues = Array.from(result.parameters.values());
-            const numberParam = paramValues.find(v => v === '5');
-            expect(numberParam).toBe('5');
+            expect(result.where).toContain('<number>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('5');
         });
 
         test('should handle negative numbers', () => {
             const query = '$filter=balance eq n"-50.25"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            const paramValues = Array.from(result.parameters.values());
-            const numberParam = paramValues.find(v => v === '-50.25');
-            expect(numberParam).toBe('-50.25');
+            expect(result.where).toContain('<number>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('-50.25');
         });
 
         test('should preserve large integer precision', () => {
             const query = '$filter=bigNumber eq n"9007199254740992"'; // Number larger than MAX_SAFE_INTEGER
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            const paramValues = Array.from(result.parameters.values());
-            const numberParam = paramValues.find(v => v === '9007199254740992');
-            expect(numberParam).toBe('9007199254740992');
+            expect(result.where).toContain('<number>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('9007199254740992');
         });
 
         test('should preserve decimal precision', () => {
             const query = '$filter=preciseAmount eq n"123.456789012345"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            const paramValues = Array.from(result.parameters.values());
-            const numberParam = paramValues.find(v => v === '123.456789012345');
-            expect(numberParam).toBe('123.456789012345');
+            expect(result.where).toContain('<number>$literal1');
+            expect(result.parameters.get('$literal1')).toBe('123.456789012345');
         });
     });
 
@@ -138,20 +119,24 @@ describe('Prefixed Literal Parsing', () => {
             const query = '$filter=customerId eq r"customers:alice" and createdAt ge d"2024-01-01" and price lt n"100"';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
-            expect(result.parameters).toBeDefined();
-
-            const paramValues = Array.from(result.parameters.values());
-            expect(paramValues.length).toBeGreaterThan(0);
+            expect(result.where).toContain('type::record($literal1)');
+            expect(result.where).toContain('<datetime>$literal2');
+            expect(result.where).toContain('<number>$literal3');
+            expect(result.parameters.get('$literal1')).toBe('customers:alice');
+            expect(result.parameters.get('$literal2')).toBe('2024-01-01');
+            expect(result.parameters.get('$literal3')).toBe('100');
         });
 
         test('should handle different quote styles together', () => {
             const query = '$filter=id eq r"table:id" and date eq d\'2024-01-15\' and amount eq n`99.99`';
             const result = createQuery(query, { type: SQLLang.SurrealDB });
 
-            expect(result).toBeDefined();
-            expect(result.where).toBeDefined();
+            expect(result.where).toContain('type::record($literal1)');
+            expect(result.where).toContain('<datetime>$literal2');
+            expect(result.where).toContain('<number>$literal3');
+            expect(result.parameters.get('$literal1')).toBe('table:id');
+            expect(result.parameters.get('$literal2')).toBe('2024-01-15');
+            expect(result.parameters.get('$literal3')).toBe('99.99');
         });
     });
 });

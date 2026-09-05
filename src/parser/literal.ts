@@ -22,7 +22,15 @@ export class Literal {
         return (new Literal(type, value)).valueOf();
     }
 
-    'Edm.String'(value: string) { return decodeURIComponent(value).slice(1, -1).replace(/''/g, "'"); }
+    'Edm.String'(value: string) {
+        // Try URI decoding - if it fails (e.g. raw % not part of an escape
+        // sequence), fall back to the raw value. This handles cases where
+        // the input was already decoded or contains literal % characters.
+        let decoded: string;
+        try { decoded = decodeURIComponent(value); }
+        catch { decoded = value; }
+        return decoded.slice(1, -1).replace(/''/g, "'");
+    }
     'Edm.Byte'(value: string) { return integer(value); }
     'Edm.SByte'(value: string) { return integer(value); }
     'Edm.Int16'(value: string) { return integer(value); }
@@ -41,7 +49,9 @@ export class Literal {
     }
 
     'Edm.Guid'(value: string) {
-        const decoded = decodeURIComponent(value);
+        let decoded: string;
+        try { decoded = decodeURIComponent(value); }
+        catch { decoded = value; }
         // Note: this doesn't verify a specific GUID version, just the general format.
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded)) {
             throw new ODataV4ParseError({ msg: `Guid ${value} is invalid` });

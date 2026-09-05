@@ -381,7 +381,7 @@ export const ODataV4ToSurrealQL = (
  * @param db - The SurrealDB database instance.
  * @param table - The name of the table to query.
  * @param urlPath - The request URL containing OData query parameters.
- * @returns A Promise resolving to an object containing OData-compliant results, including count, nextlink, and value array.
+ * @returns A Promise resolving to an object containing OData-compliant results, including count, nextLink, and value array.
  */
 export const RunODataV4SelectFilter = async (
     db: Surreal,
@@ -468,7 +468,7 @@ export const RunODataV4SelectFilter = async (
         // '@odata.metadata': metadata,
         // '@odata.context': `${url.pathname}$metadata#${table}`,
         '@odata.count': includeCount ? count : undefined,
-        '@odata.nextlink': (skip + pageSize) >= (count as number)
+        '@odata.nextLink': (skip + pageSize) >= (count as number)
             ? undefined
             : `${url.pathname}?${url.searchParams.toString()}`,
         value: actualData

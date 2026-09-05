@@ -187,7 +187,12 @@ export class SurrealDbVisitor extends Visitor {
 
     protected VisitIsOfExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
-        const typeName = node.value.right?.value || node.value.right?.raw;
+        // The parser stores the type name in node.value.typename
+        // and the target expression in node.value.target.
+        let typeName = node.value.typename?.value?.name || node.value.typename?.raw || node.value.right?.value || node.value.right?.raw;
+        if (typeof typeName === 'string' && typeName.startsWith("'") && typeName.endsWith("'")) {
+            typeName = typeName.slice(1, -1);
+        }
         const typeMap: Record<string, string> = {
             'Edm.String': 'string',
             'Edm.Int32': 'number',
@@ -201,14 +206,18 @@ export class SurrealDbVisitor extends Visitor {
         };
 
         const surrealType = typeMap[typeName] || 'string';
-        this[target] += `type::is::${surrealType}(`;
-        this.Visit(node.value.left, context);
+        this[target] += `type::is_${surrealType}(`;
+        if (node.value.target) this.Visit(node.value.target, context);
+        else if (node.value.left) this.Visit(node.value.left, context);
         this[target] += ")";
     }
 
     protected VisitCastExpression(node: Lexer.Token, context: any) {
         const target = context?.target || 'where';
-        const typeName = node.value.right?.value || node.value.right?.raw;
+        let typeName = node.value.typename?.value?.name || node.value.typename?.raw || node.value.right?.value || node.value.right?.raw;
+        if (typeof typeName === 'string' && typeName.startsWith("'") && typeName.endsWith("'")) {
+            typeName = typeName.slice(1, -1);
+        }
         const typeMap: Record<string, string> = {
             'Edm.String': 'string',
             'Edm.Int32': 'int',
@@ -222,7 +231,8 @@ export class SurrealDbVisitor extends Visitor {
 
         const surrealType = typeMap[typeName] || 'string';
         this[target] += `type::${surrealType}(`;
-        this.Visit(node.value.left, context);
+        if (node.value.target) this.Visit(node.value.target, context);
+        else if (node.value.left) this.Visit(node.value.left, context);
         this[target] += ")";
     }
 
@@ -711,6 +721,11 @@ export class SurrealDbVisitor extends Visitor {
                 this.Visit(params[0], context);
                 this[target] += ", ";
                 this.Visit(params[1], context);
+                this[target] += ")";
+                break;
+            case "geo.length":
+                this[target] += "geo::length(";
+                this.Visit(params[0], context);
                 this[target] += ")";
                 break;
             case "length":

@@ -21,6 +21,16 @@ export class MySqlVisitor extends Visitor {
                 this.Visit(params[0], context); // string
                 this[target] += `) - 1)`;
                 break;
+            case "fractionalseconds":
+                this[target] += "MICROSECOND(";
+                this.Visit(params[0], context);
+                this[target] += ") / 1000000";
+                break;
+            case "totalseconds":
+                this[target] += "UNIX_TIMESTAMP(";
+                this.Visit(params[0], context);
+                this[target] += ")";
+                break;
             default:
                 super.VisitMethodCallExpression(node, context);
                 break;
