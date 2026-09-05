@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.2.0](https://github.com/knackstedt/odatav4/compare/v5.1.0...v5.2.0) (2026-09-05)
+
+
+### Features
+
+* add node:sqlite dialect, parser fixes, and comprehensive fuzz testing ([407cb16](https://github.com/knackstedt/odatav4/commit/407cb1675c25c5984cadd7be062e74e6ee2c2f11))
+
 ## [5.1.0](https://github.com/knackstedt/odatav4/compare/v5.0.2...v5.1.0) (2026-08-08)
 
 ### [5.0.2](https://github.com/knackstedt/odatav4/compare/v5.0.1...v5.0.2) (2026-08-08)
